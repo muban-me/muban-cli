@@ -221,10 +221,10 @@ class TestAPIErrorHandling:
             responses.GET,
             "https://test.muban.me/api/v1/templates",
             json={"errors": [{"message": "Specific error message"}]},
-            status=500
+            status=400
         )
         
-        with pytest.raises(APIError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             client.list_templates()
         
         assert "Specific error message" in str(exc_info.value)
@@ -236,10 +236,10 @@ class TestAPIErrorHandling:
             responses.GET,
             "https://test.muban.me/api/v1/templates",
             json={"message": "Direct error message"},
-            status=500
+            status=400
         )
         
-        with pytest.raises(APIError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             client.list_templates()
         
         assert "Direct error message" in str(exc_info.value)
