@@ -204,20 +204,38 @@ class MubanAuthClient:
             try:
                 data = response.json()
                 
-                # Extract token from various response formats
+                # Extract token from various response formats (snake_case and camelCase)
                 token = (
                     data.get("access_token") or
+                    data.get("accessToken") or
                     data.get("token") or
                     data.get("data", {}).get("access_token") or
+                    data.get("data", {}).get("accessToken") or
                     data.get("data", {}).get("token")
+                )
+                
+                # Extract refresh token (snake_case and camelCase)
+                refresh_token = (
+                    data.get("refresh_token") or
+                    data.get("refreshToken") or
+                    data.get("data", {}).get("refresh_token") or
+                    data.get("data", {}).get("refreshToken")
+                )
+                
+                # Extract expires_in (snake_case and camelCase)
+                expires_in = (
+                    data.get("expires_in") or
+                    data.get("expiresIn") or
+                    data.get("data", {}).get("expires_in") or
+                    data.get("data", {}).get("expiresIn")
                 )
                 
                 if token:
                     return {
                         "access_token": token,
-                        "refresh_token": data.get("refresh_token"),
-                        "expires_in": data.get("expires_in"),
-                        "token_type": data.get("token_type", "Bearer"),
+                        "refresh_token": refresh_token,
+                        "expires_in": expires_in,
+                        "token_type": data.get("token_type") or data.get("tokenType", "Bearer"),
                     }
                 else:
                     raise AuthenticationError(

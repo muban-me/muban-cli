@@ -111,9 +111,22 @@ def truncate_string(s: str, max_length: int = 50) -> str:
     Returns:
         Truncated string
     """
+    if s is None:
+        return "-"
     if len(s) <= max_length:
         return s
     return s[:max_length - 3] + "..."
+
+
+def _strip_ansi(s: str) -> str:
+    """Remove ANSI escape codes from string for length calculation."""
+    import re
+    return re.sub(r'\x1b\[[0-9;]*m', '', str(s))
+
+
+def _visible_len(s: str) -> int:
+    """Get visible length of string (excluding ANSI codes)."""
+    return len(_strip_ansi(s))
 
 
 def print_table(
@@ -130,22 +143,27 @@ def print_table(
         widths: Optional column widths
     """
     if not widths:
-        # Calculate column widths
+        # Calculate column widths (accounting for ANSI codes)
         widths = [len(h) for h in headers]
         for row in rows:
             for i, cell in enumerate(row):
                 if i < len(widths):
-                    widths[i] = max(widths[i], len(str(cell)))
+                    widths[i] = max(widths[i], _visible_len(str(cell)))
     
     # Print header
     header_line = " | ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
     click.echo(header_line)
     click.echo("-" * len(header_line))
     
-    # Print rows
+    # Print rows (pad based on visible length, not raw length)
     for row in rows:
-        row_line = " | ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row))
-        click.echo(row_line)
+        cells = []
+        for i, cell in enumerate(row):
+            cell_str = str(cell)
+            visible_width = _visible_len(cell_str)
+            padding = widths[i] - visible_width
+            cells.append(cell_str + " " * padding)
+        click.echo(" | ".join(cells))
 
 
 def print_json(data: Any, indent: int = 2) -> None:

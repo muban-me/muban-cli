@@ -599,6 +599,64 @@ class MubanAPIClient:
         
         return output_path
     
+    def generate_document_raw(
+        self,
+        template_id: str,
+        output_format: str,
+        request_data: Dict[str, Any],
+        output_path: Optional[Path] = None
+    ) -> Path:
+        """
+        Generate a document with a raw request body.
+        
+        This allows passing the full request body for advanced testing.
+        
+        Args:
+            template_id: Template UUID
+            output_format: Output format (pdf, xlsx, docx, rtf, html)
+            request_data: Full request body as dict
+            output_path: Optional output path
+        
+        Returns:
+            Path to generated document
+        """
+        url = urljoin(self.base_url, f"templates/{template_id}/generate/{output_format}")
+        headers = self._get_headers({"Content-Type": "application/json"})
+        
+        try:
+            response = self.session.post(
+                url,
+                json=request_data,
+                headers=headers,
+                timeout=self.config.timeout * 2,
+                verify=self.config.verify_ssl,
+                stream=True,
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"Document generation failed: {e}")
+        
+        if response.status_code != 200:
+            self._handle_response(response)
+        
+        # Determine output path
+        if output_path is None:
+            content_disposition = response.headers.get('Content-Disposition', '')
+            if 'filename=' in content_disposition:
+                fname = content_disposition.split('filename=')[1].strip('"\'')
+            else:
+                fname = f"document.{output_format}"
+            output_path = Path(fname)
+        
+        # Ensure output directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write content
+        with open(output_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        return output_path
+    
     def get_fonts(self) -> Dict[str, Any]:
         """Get available fonts."""
         return self._request("GET", "templates/fonts")
@@ -824,6 +882,175 @@ class MubanAPIClient:
             params["endTime"] = end_time.isoformat()
         
         return self._request("GET", "audit/dashboard/compliance", params=params)
+    
+    # ========== User Management ==========
+    
+    def get_current_user(self) -> Dict[str, Any]:
+        """Get current authenticated user profile."""
+        return self._request("GET", "users/me")
+    
+    def update_current_user(
+        self,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update current user profile."""
+        data = {}
+        if first_name is not None:
+            data["firstName"] = first_name
+        if last_name is not None:
+            data["lastName"] = last_name
+        if email is not None:
+            data["email"] = email
+        
+        return self._request("PUT", "users/me", json_data=data)
+    
+    def change_current_user_password(
+        self,
+        current_password: str,
+        new_password: str
+    ) -> Dict[str, Any]:
+        """Change current user's password."""
+        return self._request(
+            "PUT",
+            "users/me/password",
+            json_data={
+                "currentPassword": current_password,
+                "newPassword": new_password
+            }
+        )
+    
+    def list_users(
+        self,
+        page: int = 1,
+        size: int = 20,
+        search: Optional[str] = None,
+        role: Optional[str] = None,
+        enabled: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """
+        List users (admin only).
+        
+        Args:
+            page: Page number
+            size: Page size
+            search: Search query (username, email, name)
+            role: Filter by role (ROLE_USER, ROLE_ADMIN, ROLE_MANAGER)
+            enabled: Filter by enabled status
+        """
+        params: Dict[str, Any] = {"page": page, "size": size}
+        if search:
+            params["search"] = search
+        if role:
+            params["role"] = role
+        if enabled is not None:
+            params["enabled"] = enabled
+        
+        return self._request("GET", "users", params=params)
+    
+    def get_user(self, user_id: str) -> Dict[str, Any]:
+        """Get user by ID (admin or own profile)."""
+        return self._request("GET", f"users/{user_id}")
+    
+    def create_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        roles: Optional[List[str]] = None,
+        enabled: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Create new user (admin only).
+        
+        Args:
+            username: Username (3-50 chars)
+            email: Email address
+            password: Password (min 8 chars)
+            first_name: First name
+            last_name: Last name
+            roles: List of roles (ROLE_USER, ROLE_ADMIN, ROLE_MANAGER)
+            enabled: Whether user is enabled
+        """
+        data = {
+            "username": username,
+            "email": email,
+            "password": password,
+            "firstName": first_name,
+            "lastName": last_name,
+            "enabled": enabled
+        }
+        if roles:
+            data["roles"] = roles
+        
+        return self._request("POST", "users", json_data=data, expected_status=201)
+    
+    def update_user(
+        self,
+        user_id: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update user profile (admin or own profile)."""
+        data = {}
+        if first_name is not None:
+            data["firstName"] = first_name
+        if last_name is not None:
+            data["lastName"] = last_name
+        if email is not None:
+            data["email"] = email
+        
+        return self._request("PUT", f"users/{user_id}", json_data=data)
+    
+    def delete_user(self, user_id: str) -> Dict[str, Any]:
+        """Delete user (admin only, cannot delete own account)."""
+        return self._request("DELETE", f"users/{user_id}", expected_status=204)
+    
+    def update_user_roles(
+        self,
+        user_id: str,
+        roles: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Update user roles (admin only).
+        
+        Args:
+            user_id: User UUID
+            roles: List of roles (ROLE_USER, ROLE_ADMIN, ROLE_MANAGER)
+        """
+        return self._request(
+            "PUT",
+            f"users/{user_id}/roles",
+            json_data={"roles": roles}
+        )
+    
+    def change_user_password(
+        self,
+        user_id: str,
+        current_password: str,
+        new_password: str
+    ) -> Dict[str, Any]:
+        """Change user password (admin or own password)."""
+        return self._request(
+            "PUT",
+            f"users/{user_id}/password",
+            json_data={
+                "currentPassword": current_password,
+                "newPassword": new_password
+            }
+        )
+    
+    def enable_user(self, user_id: str) -> Dict[str, Any]:
+        """Enable user account (admin only)."""
+        return self._request("PUT", f"users/{user_id}", json_data={"enabled": True})
+    
+    def disable_user(self, user_id: str) -> Dict[str, Any]:
+        """Disable user account (admin only)."""
+        return self._request("PUT", f"users/{user_id}", json_data={"enabled": False})
     
     # ========== Configuration ==========
     
