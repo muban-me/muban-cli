@@ -1,0 +1,7 @@
+*.log
+*.pdf
+temp/
+.vscode/
+.venv/
+.coverage
+__pycache__/

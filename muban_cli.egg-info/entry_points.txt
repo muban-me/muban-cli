@@ -1,0 +1,2 @@
+[console_scripts]
+muban-cli = muban_cli.cli:main

@@ -1,3 +1,46 @@
+Metadata-Version: 2.4
+Name: muban-cli
+Version: 1.0.0
+Summary: Command-line interface for Muban Document Generation Service
+Author-email: Muban Team <contact@muban.me>
+Maintainer-email: Muban Team <contact@muban.me>
+License: MIT
+Project-URL: Homepage, https://muban.me
+Project-URL: Documentation, https://muban.me/features.html
+Keywords: muban,jasperreports,document-generation,cli,pdf,reporting,templates
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Text Processing :: Markup
+Classifier: Topic :: Utilities
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.0.0
+Requires-Dist: requests>=2.25.0
+Requires-Dist: urllib3>=1.26.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.10.0; extra == "dev"
+Requires-Dist: responses>=0.23.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: types-requests>=2.28.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: mkdocs>=1.4.0; extra == "docs"
+Requires-Dist: mkdocs-material>=9.0.0; extra == "docs"
+
 # Muban CLI
 
 A robust command-line interface for the **Muban Document Generation Service**. Manage JasperReports templates and generate documents directly from your terminal.
@@ -80,9 +123,9 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 ### Environment Variables
 
 | Variable | Description |
-| -------- | ----------- |
+|----------|-------------|
 | `MUBAN_TOKEN` | JWT Bearer token (obtained via `muban login`) |
-| `MUBAN_SERVER_URL` | API server URL (default: <https://api.muban.me>) |
+| `MUBAN_SERVER_URL` | API server URL (default: https://api.muban.me) |
 | `MUBAN_AUTH_SERVER_URL` | Auth server URL (if different from API server) |
 | `MUBAN_TIMEOUT` | Request timeout in seconds |
 | `MUBAN_VERIFY_SSL` | Enable/disable SSL verification |
@@ -115,13 +158,12 @@ muban logout
 ```
 
 **Token Refresh:**
-
 - If the server provides a refresh token, it's automatically stored
 - The CLI automatically refreshes expired tokens when making API requests
 - Use `muban refresh` to manually refresh before expiration
 - Use `muban whoami` to see token expiration time
 
-### Configuration Commands
+### Configuration
 
 ```bash
 # Interactive configuration
@@ -287,12 +329,12 @@ muban audit cleanup --yes
 
 All commands support these options:
 
-| Option      | Short | Description                   |
-|-------------|-------|-------------------------------|
-| `--verbose` | `-v`  | Enable verbose output         |
-| `--quiet`   | `-q`  | Suppress non-essential output |
-| `--format`  | `-f`  | Output format (table, json)   |
-| `--help`    |       | Show help message             |
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--verbose` | `-v` | Enable verbose output |
+| `--quiet` | `-q` | Suppress non-essential output |
+| `--format` | `-f` | Output format (table, json) |
+| `--help` | | Show help message |
 
 ## CI/CD Integration
 
@@ -381,7 +423,7 @@ echo "Template deployed successfully!"
 The CLI provides detailed error messages and appropriate exit codes:
 
 | Exit Code | Meaning |
-| --------- | ------- |
+|-----------|---------|
 | 0 | Success |
 | 1 | General error |
 | 130 | Interrupted (Ctrl+C) |
@@ -438,7 +480,7 @@ flake8 muban_cli
 
 ### Project Structure
 
-```text
+```
 muban-cli/
 ├── muban_cli/
 │   ├── __init__.py      # Package initialization
@@ -459,8 +501,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 Email: <contact@muban.me>
-- 📖 Documentation: <https://muban.me/features.html>
+- 📧 Email: contact@muban.me
+- 📖 Documentation: https://docs.muban.me/cli
+- 🐛 Issues: https://github.com/muban/muban-cli/issues
 
 ## Contributing
 
