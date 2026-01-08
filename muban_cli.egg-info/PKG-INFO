@@ -123,9 +123,9 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 ### Environment Variables
 
 | Variable | Description |
-|----------|-------------|
+| -------- | ----------- |
 | `MUBAN_TOKEN` | JWT Bearer token (obtained via `muban login`) |
-| `MUBAN_SERVER_URL` | API server URL (default: https://api.muban.me) |
+| `MUBAN_SERVER_URL` | API server URL (default: <https://api.muban.me>) |
 | `MUBAN_AUTH_SERVER_URL` | Auth server URL (if different from API server) |
 | `MUBAN_TIMEOUT` | Request timeout in seconds |
 | `MUBAN_VERIFY_SSL` | Enable/disable SSL verification |
@@ -158,12 +158,13 @@ muban logout
 ```
 
 **Token Refresh:**
+
 - If the server provides a refresh token, it's automatically stored
 - The CLI automatically refreshes expired tokens when making API requests
 - Use `muban refresh` to manually refresh before expiration
 - Use `muban whoami` to see token expiration time
 
-### Configuration
+### Configuration Commands
 
 ```bash
 # Interactive configuration
@@ -329,12 +330,12 @@ muban audit cleanup --yes
 
 All commands support these options:
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--verbose` | `-v` | Enable verbose output |
-| `--quiet` | `-q` | Suppress non-essential output |
-| `--format` | `-f` | Output format (table, json) |
-| `--help` | | Show help message |
+| Option      | Short | Description                   |
+|-------------|-------|-------------------------------|
+| `--verbose` | `-v`  | Enable verbose output         |
+| `--quiet`   | `-q`  | Suppress non-essential output |
+| `--format`  | `-f`  | Output format (table, json)   |
+| `--help`    |       | Show help message             |
 
 ## CI/CD Integration
 
@@ -423,7 +424,7 @@ echo "Template deployed successfully!"
 The CLI provides detailed error messages and appropriate exit codes:
 
 | Exit Code | Meaning |
-|-----------|---------|
+| --------- | ------- |
 | 0 | Success |
 | 1 | General error |
 | 130 | Interrupted (Ctrl+C) |
@@ -480,7 +481,7 @@ flake8 muban_cli
 
 ### Project Structure
 
-```
+```text
 muban-cli/
 ├── muban_cli/
 │   ├── __init__.py      # Package initialization
@@ -501,9 +502,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 Email: contact@muban.me
-- 📖 Documentation: https://docs.muban.me/cli
-- 🐛 Issues: https://github.com/muban/muban-cli/issues
+- 📧 Email: <contact@muban.me>
+- 📖 Documentation: <https://muban.me/features.html>
 
 ## Contributing
 
