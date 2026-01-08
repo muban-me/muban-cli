@@ -6,3 +6,8 @@ temp/
 .coverage
 __pycache__/
 .pytest_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
