@@ -55,10 +55,21 @@ Quick Start:
   4. Generate a document:      {__prog_name__} generate TEMPLATE_ID -p title=Report
 
 \b
+Service Account / CI-CD (with external IdP like ADFS, Azure AD, Keycloak):
+  1. Configure:                {__prog_name__} configure --server https://api.muban.me \\
+                                 --auth-server https://adfs.company.com/adfs/oauth2/token \\
+                                 --client-id ID --client-secret SECRET
+  2. Login:                    {__prog_name__} login --client-credentials
+
+\b
 Environment Variables:
-  MUBAN_TOKEN        - JWT Bearer token (from login)
-  MUBAN_SERVER_URL   - API server URL (default: https://api.muban.me)
-  MUBAN_CONFIG_DIR   - Custom configuration directory
+  MUBAN_SERVER_URL      - API server URL (default: https://api.muban.me)
+  MUBAN_AUTH_SERVER_URL - OAuth2/IdP token endpoint (if different from API)
+  MUBAN_CLIENT_ID       - OAuth2 Client ID (for client credentials flow)
+  MUBAN_CLIENT_SECRET   - OAuth2 Client Secret (for client credentials flow)
+  MUBAN_TOKEN           - JWT Bearer token (skip login, use directly)
+  MUBAN_VERIFY_SSL      - Set to 'false' to skip SSL verification (dev only)
+  MUBAN_CONFIG_DIR      - Custom configuration directory
 """
 
 

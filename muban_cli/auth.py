@@ -310,6 +310,115 @@ class MubanAuthClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"Token refresh failed: {e}")
     
+    def client_credentials_login(
+        self,
+        client_id: str,
+        client_secret: str,
+        scope: Optional[str] = None,
+        auth_endpoint: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Authenticate using OAuth2 client credentials flow.
+        
+        This flow is designed for service-to-service authentication where
+        no user interaction is required. Ideal for CI/CD pipelines, 
+        automated scripts, and backend services.
+        
+        Args:
+            client_id: OAuth2 client ID
+            client_secret: OAuth2 client secret
+            scope: Optional scope to request (space-separated)
+            auth_endpoint: Optional custom auth endpoint path
+        
+        Returns:
+            Dict containing access_token and optionally expires_in
+        
+        Raises:
+            AuthenticationError: If authentication fails
+        """
+        # Try specified endpoint or common ones
+        endpoints_to_try = [auth_endpoint] if auth_endpoint else self.AUTH_ENDPOINTS
+        
+        last_error = None
+        
+        for endpoint in endpoints_to_try:
+            if endpoint is None:
+                continue
+                
+            try:
+                result = self._try_client_credentials(endpoint, client_id, client_secret, scope)
+                if result:
+                    return result
+            except AuthenticationError as e:
+                last_error = e
+                # If it's a clear auth failure, don't try other endpoints
+                if "Invalid client" in str(e) or "401" in str(e) or "invalid_client" in str(e):
+                    raise
+            except APIError as e:
+                last_error = e
+                logger.debug(f"Auth endpoint {endpoint} failed: {e}")
+                continue
+        
+        if last_error:
+            raise last_error
+        
+        raise AuthenticationError(
+            "Could not find authentication endpoint. "
+            "Please specify --auth-endpoint or configure auth_server_url."
+        )
+    
+    def _try_client_credentials(
+        self,
+        endpoint: str,
+        client_id: str,
+        client_secret: str,
+        scope: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Try to authenticate with client credentials at a specific endpoint.
+        
+        Args:
+            endpoint: Auth endpoint path
+            client_id: OAuth2 client ID
+            client_secret: OAuth2 client secret
+            scope: Optional scope to request
+        
+        Returns:
+            Token response or None if endpoint not found
+        """
+        url = urljoin(self.auth_base_url, endpoint.lstrip('/'))
+        logger.debug(f"Trying client credentials auth at: {url}")
+        
+        # OAuth2 client credentials grant (form data)
+        form_payload = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+        
+        if scope:
+            form_payload["scope"] = scope
+        
+        try:
+            response = self.session.post(
+                url,
+                data=form_payload,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+                timeout=self.config.timeout,
+                verify=self.config.verify_ssl,
+            )
+            
+            if response.status_code == 404:
+                return None
+            
+            return self._handle_auth_response(response)
+            
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"Connection failed: {e}")
+    
     def close(self) -> None:
         """Close the HTTP session."""
         if self._session:

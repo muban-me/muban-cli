@@ -33,6 +33,14 @@ def register_settings_commands(cli: click.Group) -> None:
         help='Auth server URL (if different from API server)'
     )
     @click.option(
+        '--client-id',
+        help='OAuth2 Client ID for client credentials authentication'
+    )
+    @click.option(
+        '--client-secret',
+        help='OAuth2 Client Secret for client credentials authentication'
+    )
+    @click.option(
         '--timeout', '-t',
         type=int,
         help='Request timeout in seconds'
@@ -52,6 +60,8 @@ def register_settings_commands(cli: click.Group) -> None:
         ctx: MubanContext,
         server: Optional[str],
         auth_server: Optional[str],
+        client_id: Optional[str],
+        client_secret: Optional[str],
         timeout: Optional[int],
         no_verify_ssl: bool,
         show: bool
@@ -63,6 +73,7 @@ def register_settings_commands(cli: click.Group) -> None:
         Examples:
           muban configure --server https://api.muban.me
           muban configure --auth-server https://auth.muban.me
+          muban configure --client-id MY_ID --client-secret MY_SECRET
           muban configure --show
         """
         config_manager = ctx.config_manager
@@ -72,6 +83,8 @@ def register_settings_commands(cli: click.Group) -> None:
             click.echo("\nCurrent Configuration:")
             click.echo(f"  Server URL:      {config.server_url}")
             click.echo(f"  Auth Server:     {config.auth_server_url or '(same as server)'}")
+            click.echo(f"  Client ID:       {config.client_id or '(not configured)'}")
+            click.echo(f"  Client Secret:   {'*' * 10 + '...' if config.client_secret else '(not configured)'}")
             click.echo(f"  Token:           {'*' * 20 + '...' if config.token else '(not authenticated)'}")
             click.echo(f"  Timeout:         {config.timeout}s")
             click.echo(f"  Verify SSL:      {config.verify_ssl}")
@@ -79,7 +92,7 @@ def register_settings_commands(cli: click.Group) -> None:
             return
         
         # Interactive configuration if no options provided
-        if not any([server, auth_server, timeout, no_verify_ssl]):
+        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl]):
             click.echo("Interactive configuration setup:")
             
             current = config_manager.get()
@@ -107,6 +120,10 @@ def register_settings_commands(cli: click.Group) -> None:
             updates['server_url'] = server
         if auth_server:
             updates['auth_server_url'] = auth_server
+        if client_id:
+            updates['client_id'] = client_id
+        if client_secret:
+            updates['client_secret'] = client_secret
         if timeout:
             updates['timeout'] = timeout
         if no_verify_ssl:
@@ -115,7 +132,10 @@ def register_settings_commands(cli: click.Group) -> None:
         if updates:
             config_manager.update(**updates)
             print_success("Configuration saved successfully.")
-            print_info(f"Run '{__prog_name__} login' to authenticate with your credentials.")
+            if client_id and client_secret:
+                print_info(f"Run '{__prog_name__} login --client-credentials' to authenticate.")
+            else:
+                print_info(f"Run '{__prog_name__} login' to authenticate with your credentials.")
         else:
             print_info("No changes made.")
 

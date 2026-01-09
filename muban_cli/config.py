@@ -25,6 +25,8 @@ CREDENTIALS_FILE_NAME = "credentials.json"
 ENV_TOKEN = "MUBAN_TOKEN"
 ENV_SERVER_URL = "MUBAN_SERVER_URL"
 ENV_AUTH_SERVER_URL = "MUBAN_AUTH_SERVER_URL"
+ENV_CLIENT_ID = "MUBAN_CLIENT_ID"
+ENV_CLIENT_SECRET = "MUBAN_CLIENT_SECRET"
 ENV_TIMEOUT = "MUBAN_TIMEOUT"
 ENV_VERIFY_SSL = "MUBAN_VERIFY_SSL"
 
@@ -40,6 +42,8 @@ class MubanConfig:
     
     server_url: str = DEFAULT_SERVER_URL
     auth_server_url: str = ""  # OAuth2/Auth server URL (if different from API server)
+    client_id: str = ""  # OAuth2 Client ID for client credentials flow
+    client_secret: str = ""  # OAuth2 Client Secret for client credentials flow
     token: str = ""  # JWT Bearer token
     refresh_token: str = ""  # Refresh token for obtaining new access tokens
     token_expires_at: int = 0  # Token expiration timestamp (Unix epoch)
@@ -59,7 +63,8 @@ class MubanConfig:
         """Create configuration from dictionary."""
         # Filter only valid fields
         valid_fields = {
-            'server_url', 'auth_server_url', 'token', 'refresh_token', 'token_expires_at',
+            'server_url', 'auth_server_url', 'client_id', 'client_secret',
+            'token', 'refresh_token', 'token_expires_at',
             'timeout', 'verify_ssl', 'default_output_dir', 'default_format', 'verbose', 'page_size'
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
@@ -80,6 +85,10 @@ class MubanConfig:
     def has_refresh_token(self) -> bool:
         """Check if a refresh token is available."""
         return bool(self.refresh_token)
+    
+    def has_client_credentials(self) -> bool:
+        """Check if client credentials are configured."""
+        return bool(self.client_id and self.client_secret)
     
     def get_auth_server_url(self) -> str:
         """Get auth server URL, defaults to server_url if not set."""
@@ -134,6 +143,10 @@ class ConfigManager:
                         config_data['refresh_token'] = creds['refresh_token']
                     if 'token_expires_at' in creds:
                         config_data['token_expires_at'] = creds['token_expires_at']
+                    if 'client_id' in creds:
+                        config_data['client_id'] = creds['client_id']
+                    if 'client_secret' in creds:
+                        config_data['client_secret'] = creds['client_secret']
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid credentials file: {e}")
             except OSError as e:
@@ -153,6 +166,12 @@ class ConfigManager:
         
         if os.getenv(ENV_AUTH_SERVER_URL):
             env_config['auth_server_url'] = os.getenv(ENV_AUTH_SERVER_URL)
+        
+        if os.getenv(ENV_CLIENT_ID):
+            env_config['client_id'] = os.getenv(ENV_CLIENT_ID)
+        
+        if os.getenv(ENV_CLIENT_SECRET):
+            env_config['client_secret'] = os.getenv(ENV_CLIENT_SECRET)
         
         if os.getenv(ENV_TIMEOUT):
             try:
@@ -202,6 +221,8 @@ class ConfigManager:
         token = config_dict.pop('token', '')
         refresh_token = config_dict.pop('refresh_token', '')
         token_expires_at = config_dict.pop('token_expires_at', 0)
+        client_id = config_dict.pop('client_id', '')
+        client_secret = config_dict.pop('client_secret', '')
         
         # Save main config
         try:
@@ -211,14 +232,21 @@ class ConfigManager:
         except OSError as e:
             raise ConfigurationError(f"Cannot save config file: {e}")
         
-        # Save credentials separately
+        # Save credentials separately (tokens and client credentials)
+        creds = {}
         if token:
+            creds['token'] = token
+        if refresh_token:
+            creds['refresh_token'] = refresh_token
+        if token_expires_at:
+            creds['token_expires_at'] = token_expires_at
+        if client_id:
+            creds['client_id'] = client_id
+        if client_secret:
+            creds['client_secret'] = client_secret
+        
+        if creds:
             try:
-                creds = {'token': token}
-                if refresh_token:
-                    creds['refresh_token'] = refresh_token
-                if token_expires_at:
-                    creds['token_expires_at'] = token_expires_at
                 with open(self.credentials_file, 'w', encoding='utf-8') as f:
                     json.dump(creds, f, indent=2)
                 # Set restrictive permissions on credentials file

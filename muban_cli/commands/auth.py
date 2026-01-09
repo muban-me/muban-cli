@@ -30,26 +30,57 @@ def register_auth_commands(cli: click.Group) -> None:
     """Register authentication commands with the CLI."""
     
     @cli.command('login')
-    @click.option('--username', '-u', help='Username or email')
+    @click.option('--username', '-u', help='Username or email (for password grant)')
     @click.option('--password', '-p', help='Password (will prompt if not provided)')
+    @click.option('--client-credentials', '-c', is_flag=True,
+                  help='Use OAuth2 client credentials flow (for service accounts)')
+    @click.option('--client-id', help='OAuth2 Client ID (overrides configured)')
+    @click.option('--client-secret', help='OAuth2 Client Secret (overrides configured)')
+    @click.option('--scope', help='OAuth2 scope to request (space-separated)')
     @click.option('--server', '-s', help='Server URL (overrides configured server)')
     @click.option('--auth-endpoint', help='Custom auth endpoint path (e.g., /oauth/token)')
+    @click.option('--no-verify-ssl', '-k', is_flag=True,
+                  help='Skip SSL certificate verification (for development)')
     @pass_context
     def login(
         ctx: MubanContext,
         username: Optional[str],
         password: Optional[str],
+        client_credentials: bool,
+        client_id: Optional[str],
+        client_secret: Optional[str],
+        scope: Optional[str],
         server: Optional[str],
-        auth_endpoint: Optional[str]
+        auth_endpoint: Optional[str],
+        no_verify_ssl: bool
     ):
         """
-        Authenticate with username and password to obtain a token.
+        Authenticate to obtain an access token.
+        
+        Supports two authentication methods:
+        
+        \b
+        1. Password Grant (default):
+           Interactive login with username and password.
+        
+        \b
+        2. Client Credentials Grant (--client-credentials):
+           For service accounts, CI/CD pipelines, and automation.
+           Uses client_id and client_secret instead of user credentials.
         
         \b
         Examples:
-          %(prog)s login
-          %(prog)s login --username admin@example.com
-          %(prog)s login -u admin -p secret --server https://api.muban.me
+          muban login                              # Interactive password login
+          muban login --username admin@example.com
+          muban login --client-credentials         # Use stored client credentials
+          muban login -c --client-id ID --client-secret SECRET
+          muban login -c -k                        # Skip SSL verification (dev)
+        
+        \b
+        Environment Variables:
+          MUBAN_CLIENT_ID     - OAuth2 Client ID
+          MUBAN_CLIENT_SECRET - OAuth2 Client Secret
+          MUBAN_VERIFY_SSL    - Set to 'false' to skip SSL verification
         """
         from ..auth import MubanAuthClient
         
@@ -60,12 +91,46 @@ def register_auth_commands(cli: click.Group) -> None:
         if server:
             config.server_url = server
         
+        # Override SSL verification if specified
+        if no_verify_ssl:
+            config.verify_ssl = False
+        
         if not config.server_url:
             print_error(
                 "Server URL not configured.",
                 f"Run '{__prog_name__} configure --server URL' first."
             )
             sys.exit(1)
+        
+        # Warn if SSL verification is disabled
+        if not config.verify_ssl:
+            click.echo(click.style("⚠ Warning: SSL verification disabled", fg="yellow"))
+        
+        # Determine which authentication flow to use
+        if client_credentials:
+            # Client credentials flow
+            _login_client_credentials(
+                ctx, config, config_manager,
+                client_id, client_secret, scope, auth_endpoint
+            )
+        else:
+            # Password grant flow
+            _login_password(
+                ctx, config, config_manager,
+                username, password, auth_endpoint
+            )
+
+
+    def _login_password(
+        ctx: MubanContext,
+        config,
+        config_manager,
+        username: Optional[str],
+        password: Optional[str],
+        auth_endpoint: Optional[str]
+    ):
+        """Handle password grant login flow."""
+        from ..auth import MubanAuthClient
         
         # Prompt for credentials if not provided
         if not username:
@@ -74,7 +139,6 @@ def register_auth_commands(cli: click.Group) -> None:
         if not password:
             password = click.prompt("Password", hide_input=True)
         
-        # At this point username and password are guaranteed to be strings
         assert username is not None
         assert password is not None
         
@@ -88,29 +152,9 @@ def register_auth_commands(cli: click.Group) -> None:
                     auth_endpoint=auth_endpoint
                 )
                 
-                # Save the token and refresh token
-                token = result.get('access_token')
-                if token:
-                    update_data = {'token': token}
-                    
-                    # Save refresh token if provided
-                    if result.get('refresh_token'):
-                        update_data['refresh_token'] = result['refresh_token']
-                    
-                    # Calculate expiration time
-                    if result.get('expires_in'):
-                        update_data['token_expires_at'] = int(time.time()) + int(result['expires_in'])
-                    
-                    config_manager.update(**update_data)
-                    print_success("Login successful! Token saved.")
-                    
-                    if result.get('expires_in'):
-                        click.echo(f"  Token expires in: {result['expires_in']} seconds")
-                    if result.get('refresh_token'):
-                        click.echo("  Refresh token saved for automatic renewal.")
-                else:
-                    print_error("Login succeeded but no token received.")
-                    sys.exit(1)
+                _save_token_result(config_manager, result)
+                print_success("Login successful! Token saved.")
+                _print_token_info(result)
                     
         except AuthenticationError as e:
             print_error(f"Login failed: {e}")
@@ -118,6 +162,82 @@ def register_auth_commands(cli: click.Group) -> None:
         except MubanError as e:
             print_error(str(e))
             sys.exit(1)
+
+
+    def _login_client_credentials(
+        ctx: MubanContext,
+        config,
+        config_manager,
+        client_id: Optional[str],
+        client_secret: Optional[str],
+        scope: Optional[str],
+        auth_endpoint: Optional[str]
+    ):
+        """Handle client credentials login flow."""
+        from ..auth import MubanAuthClient
+        
+        # Use provided credentials or fall back to config
+        cid = client_id or config.client_id
+        csecret = client_secret or config.client_secret
+        
+        if not cid or not csecret:
+            print_error(
+                "Client credentials not configured.",
+                f"Either provide --client-id and --client-secret options,\n"
+                f"set MUBAN_CLIENT_ID and MUBAN_CLIENT_SECRET environment variables,\n"
+                f"or run '{__prog_name__} configure --client-id ID --client-secret SECRET'."
+            )
+            sys.exit(1)
+        
+        print_info(f"Authenticating with client credentials to {config.get_auth_server_url()}...")
+        
+        try:
+            with MubanAuthClient(config) as auth_client:
+                result = auth_client.client_credentials_login(
+                    client_id=cid,
+                    client_secret=csecret,
+                    scope=scope,
+                    auth_endpoint=auth_endpoint
+                )
+                
+                _save_token_result(config_manager, result)
+                print_success("Client credentials login successful! Token saved.")
+                _print_token_info(result)
+                    
+        except AuthenticationError as e:
+            print_error(f"Client credentials login failed: {e}")
+            sys.exit(1)
+        except MubanError as e:
+            print_error(str(e))
+            sys.exit(1)
+
+
+    def _save_token_result(config_manager, result: dict):
+        """Save token result to configuration."""
+        token = result.get('access_token')
+        if not token:
+            print_error("Authentication succeeded but no token received.")
+            sys.exit(1)
+        
+        update_data = {'token': token}
+        
+        # Save refresh token if provided
+        if result.get('refresh_token'):
+            update_data['refresh_token'] = result['refresh_token']
+        
+        # Calculate expiration time
+        if result.get('expires_in'):
+            update_data['token_expires_at'] = int(time.time()) + int(result['expires_in'])
+        
+        config_manager.update(**update_data)
+
+
+    def _print_token_info(result: dict):
+        """Print token information."""
+        if result.get('expires_in'):
+            click.echo(f"  Token expires in: {result['expires_in']} seconds")
+        if result.get('refresh_token'):
+            click.echo("  Refresh token saved for automatic renewal.")
 
     @cli.command('logout')
     @click.option('--yes', '-y', is_flag=True, help='Skip confirmation')
@@ -228,15 +348,27 @@ def register_auth_commands(cli: click.Group) -> None:
                     click.echo("  Expires: " + click.style("EXPIRED", fg="red"))
                     if config.has_refresh_token():
                         print_info(f"Run '{__prog_name__} refresh' to get a new token.")
+                    elif config.has_client_credentials():
+                        print_info(f"Run '{__prog_name__} login --client-credentials' to re-authenticate.")
                     else:
                         print_info(f"Run '{__prog_name__} login' to re-authenticate.")
             
             # Show refresh token availability
             if config.has_refresh_token():
                 click.echo("  Refresh: " + click.style("available", fg="green"))
+            elif config.has_client_credentials():
+                click.echo("  Refresh: " + click.style("via client credentials", fg="cyan"))
             else:
                 click.echo("  Refresh: " + click.style("not available", fg="yellow"))
+            
+            # Show client credentials status
+            if config.has_client_credentials():
+                click.echo("  Client:  " + click.style(f"{config.client_id[:20]}..." if len(config.client_id) > 20 else config.client_id, fg="cyan"))
         else:
             click.echo("\nAuthentication Status: " + click.style("Not authenticated", fg="red"))
             click.echo(f"  Server: {config.server_url or '(not configured)'}")
-            print_info(f"Run '{__prog_name__} login' to authenticate.")
+            if config.has_client_credentials():
+                click.echo("  Client:  " + click.style(f"{config.client_id}", fg="cyan") + " (configured)")
+                print_info(f"Run '{__prog_name__} login --client-credentials' to authenticate.")
+            else:
+                print_info(f"Run '{__prog_name__} login' to authenticate.")
