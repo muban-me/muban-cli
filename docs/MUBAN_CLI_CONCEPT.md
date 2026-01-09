@@ -2,13 +2,13 @@
 
 ## Considerations
 
-### ✅ Why a Python CLI is the Right Choice
+### Why a Python CLI is the Right Choice
 
 * **Portability**: Runs on Windows, macOS, and Linux, which covers all Jaspersoft Studio environments.
 * **Automation-Friendly**: Can be called from shell scripts, Git hooks, and any CI/CD pipeline (GitHub Actions, GitLab CI, Jenkins).
 * **Developer-Centric**: Familiar and easy to distribute (`pip install muban-cli`).
 
-### 🛠️ Core Design for Your CLI Tool
+### Core Design for Your CLI Tool
 
 Here’s a suggested structure and key commands for your `muban-cli` tool:
 
@@ -41,7 +41,7 @@ zip -r my_report.zip ./my_jasper_project/
 muban push my_report.zip --message "Deployed from commit ${CI_COMMIT_SHA}"
 ```
 
-### 📦 Implementation Blueprint
+### Implementation Blueprint
 
 Here is a conceptual structure for your Python project to get you started:
 
@@ -65,7 +65,7 @@ muban-cli/
 * **Configuration**: Use **`pydantic`** with **`python-dotenv`** to manage settings in a `.mubanrc` file or environment variables.
 * **Distribution**: Package with **`setuptools`** or **`poetry`** and publish to **PyPI** so users can simply `pip install muban-cli`.
 
-### 🔐 Key Considerations for a Robust CLI
+### Key Considerations for a Robust CLI
 
 1. **Idempotent Operations**: Ensure `muban push` is safe to run multiple times (e.g., by using a unique template identifier from the `.jrxml` file).
 2. **Detailed Logging & Verbose Mode**: Crucial for debugging in automated pipelines.

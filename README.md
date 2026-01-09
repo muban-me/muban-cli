@@ -7,13 +7,13 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 ## Features
 
-- 🔐 **Secure Authentication** - JWT token-based auth with credential login
-- 📄 **Template Management** - List, upload, download, and delete templates
-- 🖨️ **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
-- 🔍 **Search & Filter** - Search templates and filter audit logs
-- 📊 **Audit & Monitoring** - Access audit logs and security dashboards (admin)
-- 🤖 **Automation Ready** - Perfect for CI/CD pipelines and scripting
-- 🌐 **Cross-Platform** - Works on Windows, macOS, and Linux
+- **Secure Authentication** - JWT token-based auth with credential login
+- **Template Management** - List, upload, download, and delete templates
+- **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
+- **Search & Filter** - Search templates and filter audit logs
+- **Audit & Monitoring** - Access audit logs and security dashboards (admin)
+- **Automation Ready** - Perfect for CI/CD pipelines and scripting
+- **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## Installation
 
@@ -459,8 +459,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 Email: <contact@muban.me>
-- 📖 Documentation: <https://muban.me/features.html>
+- Email: <contact@muban.me>
+- Documentation: <https://muban.me/features.html>
 
 ## Contributing
 
