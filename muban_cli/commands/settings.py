@@ -10,6 +10,7 @@ from typing import Optional
 
 import click
 
+from .. import __prog_name__
 from . import (
     MubanContext,
     pass_context,
@@ -114,7 +115,7 @@ def register_settings_commands(cli: click.Group) -> None:
         if updates:
             config_manager.update(**updates)
             print_success("Configuration saved successfully.")
-            print_info("Run 'muban login' to authenticate with your credentials.")
+            print_info(f"Run '{__prog_name__} login' to authenticate with your credentials.")
         else:
             print_info("No changes made.")
 

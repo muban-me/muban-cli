@@ -7,3 +7,4 @@ documents through the Muban API.
 
 __version__ = "1.0.0"
 __author__ = "Muban Team"
+__prog_name__ = "muban"  # CLI command name for messages

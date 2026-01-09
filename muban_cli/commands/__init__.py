@@ -19,6 +19,7 @@ from functools import wraps
 
 import click
 
+from .. import __prog_name__
 from ..config import ConfigManager, get_config_manager
 from ..api import MubanAPIClient
 from ..utils import (
@@ -90,7 +91,7 @@ def require_config(f):
         if not config.is_configured():
             print_error(
                 "Muban CLI is not authenticated.",
-                "Run 'muban login' to authenticate with your credentials."
+                f"Run '{__prog_name__} login' to authenticate with your credentials."
             )
             sys.exit(1)
         

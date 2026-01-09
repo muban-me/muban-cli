@@ -68,7 +68,7 @@ Homepage = "https://muban.me"
 Documentation = "https://muban.me/features.html"
 
 [project.scripts]
-muban-cli = "muban_cli.cli:main"
+muban = "muban_cli.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -169,7 +169,7 @@ def register_template_commands(cli: click.Group) -> None:
         metadata: Optional[str]
     ):
         """
-        Upload a template to the server.
+        Upload a template to the server (requires manager role).
         
         \b
         The file must be a ZIP archive containing the JasperReports template.
@@ -272,7 +272,7 @@ def register_template_commands(cli: click.Group) -> None:
         yes: bool
     ):
         """
-        Delete a template from the server.
+        Delete a template from the server (requires manager role).
         
         \b
         Examples:

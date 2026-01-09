@@ -14,6 +14,7 @@ from typing import Optional
 
 import click
 
+from .. import __prog_name__
 from . import (
     MubanContext,
     pass_context,
@@ -46,9 +47,9 @@ def register_auth_commands(cli: click.Group) -> None:
         
         \b
         Examples:
-          muban login
-          muban login --username admin@example.com
-          muban login -u admin -p secret --server https://api.muban.me
+          %(prog)s login
+          %(prog)s login --username admin@example.com
+          %(prog)s login -u admin -p secret --server https://api.muban.me
         """
         from ..auth import MubanAuthClient
         
@@ -62,7 +63,7 @@ def register_auth_commands(cli: click.Group) -> None:
         if not config.server_url:
             print_error(
                 "Server URL not configured.",
-                "Run 'muban configure --server URL' first."
+                f"Run '{__prog_name__} configure --server URL' first."
             )
             sys.exit(1)
         
@@ -143,8 +144,8 @@ def register_auth_commands(cli: click.Group) -> None:
         
         \b
         Examples:
-          muban refresh
-          muban refresh --auth-endpoint /oauth/token
+          %(prog)s refresh
+          %(prog)s refresh --auth-endpoint /oauth/token
         """
         from ..auth import MubanAuthClient
         
@@ -154,7 +155,7 @@ def register_auth_commands(cli: click.Group) -> None:
         if not config.has_refresh_token():
             print_error(
                 "No refresh token available.",
-                "Run 'muban login' to authenticate."
+                f"Run '{__prog_name__} login' to authenticate."
             )
             sys.exit(1)
         
@@ -191,7 +192,7 @@ def register_auth_commands(cli: click.Group) -> None:
         except AuthenticationError as e:
             print_error(
                 f"Token refresh failed: {e}",
-                "Your session may have expired. Run 'muban login' to re-authenticate."
+                f"Your session may have expired. Run '{__prog_name__} login' to re-authenticate."
             )
             sys.exit(1)
         except MubanError as e:
@@ -226,9 +227,9 @@ def register_auth_commands(cli: click.Group) -> None:
                 else:
                     click.echo("  Expires: " + click.style("EXPIRED", fg="red"))
                     if config.has_refresh_token():
-                        print_info("Run 'muban refresh' to get a new token.")
+                        print_info(f"Run '{__prog_name__} refresh' to get a new token.")
                     else:
-                        print_info("Run 'muban login' to re-authenticate.")
+                        print_info(f"Run '{__prog_name__} login' to re-authenticate.")
             
             # Show refresh token availability
             if config.has_refresh_token():
@@ -238,4 +239,4 @@ def register_auth_commands(cli: click.Group) -> None:
         else:
             click.echo("\nAuthentication Status: " + click.style("Not authenticated", fg="red"))
             click.echo(f"  Server: {config.server_url or '(not configured)'}")
-            print_info("Run 'muban login' to authenticate.")
+            print_info(f"Run '{__prog_name__} login' to authenticate.")

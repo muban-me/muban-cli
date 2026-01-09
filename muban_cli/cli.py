@@ -20,7 +20,7 @@ from typing import Optional
 
 import click
 
-from . import __version__
+from . import __version__, __prog_name__
 from .config import get_config_manager
 
 # Import command registration functions
@@ -41,8 +41,29 @@ logger = logging.getLogger(__name__)
 # Main CLI Group
 # ============================================================================
 
-@click.group()
-@click.version_option(version=__version__, prog_name='muban')
+CLI_HELP = f"""
+Muban CLI - Document Generation Service Management Tool.
+
+A command-line interface for managing JasperReports templates
+and generating documents through the Muban API.
+
+\b
+Quick Start:
+  1. Configure server:         {__prog_name__} configure --server https://api.muban.me
+  2. Login with credentials:   {__prog_name__} login
+  3. List templates:           {__prog_name__} list
+  4. Generate a document:      {__prog_name__} generate TEMPLATE_ID -p title=Report
+
+\b
+Environment Variables:
+  MUBAN_TOKEN        - JWT Bearer token (from login)
+  MUBAN_SERVER_URL   - API server URL (default: https://api.muban.me)
+  MUBAN_CONFIG_DIR   - Custom configuration directory
+"""
+
+
+@click.group(help=CLI_HELP)
+@click.version_option(version=__version__, prog_name=__prog_name__)
 @click.option(
     '--config-dir',
     type=click.Path(path_type=Path),
@@ -51,25 +72,7 @@ logger = logging.getLogger(__name__)
 )
 @click.pass_context
 def cli(ctx, config_dir: Optional[Path]):
-    """
-    Muban CLI - Document Generation Service Management Tool.
-    
-    A command-line interface for managing JasperReports templates
-    and generating documents through the Muban API.
-    
-    \b
-    Quick Start:
-      1. Configure server:         muban configure --server https://api.muban.me
-      2. Login with credentials:   muban login
-      3. List templates:           muban list
-      4. Generate a document:      muban generate TEMPLATE_ID -p title=Report
-    
-    \b
-    Environment Variables:
-      MUBAN_TOKEN        - JWT Bearer token (from login)
-      MUBAN_SERVER_URL   - API server URL (default: https://api.muban.me)
-      MUBAN_CONFIG_DIR   - Custom configuration directory
-    """
+    """Main CLI entry point."""
     ctx.ensure_object(MubanContext)
     ctx.obj.config_manager = get_config_manager(config_dir)
 
