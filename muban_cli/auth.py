@@ -98,9 +98,22 @@ class MubanAuthClient:
                     return result
             except AuthenticationError as e:
                 last_error = e
-                # If it's a clear auth failure, don't try other endpoints
-                if "Invalid credentials" in str(e) or "401" in str(e):
-                    raise
+                # Only stop trying if we get a clear "wrong credentials" error
+                # (not just a 401 from a non-existent endpoint)
+                error_msg = str(e).lower()
+                if any(msg in error_msg for msg in [
+                    "invalid credentials",
+                    "invalid username",
+                    "invalid password",
+                    "wrong password",
+                    "bad credentials",
+                    "unauthorized",  # explicit message, not just status code
+                ]):
+                    # This looks like a real auth failure, not just wrong endpoint
+                    logger.debug(f"Auth failed at {endpoint}: {e}")
+                    last_error = e
+                    # Continue to try other endpoints - the first one might not be the right one
+                continue
             except APIError as e:
                 last_error = e
                 logger.debug(f"Auth endpoint {endpoint} failed: {e}")
