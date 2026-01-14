@@ -1,27 +1,30 @@
 # Muban CLI Toolkit Concept
 
-## Considerations
+## Overview
 
-### Why a Python CLI is the Right Choice
+Muban CLI is a Python-based command-line interface for managing Jaspersoft report templates through the Muban API.
 
-* **Portability**: Runs on Windows, macOS, and Linux, which covers all Jaspersoft Studio environments.
-* **Automation-Friendly**: Can be called from shell scripts, Git hooks, and any CI/CD pipeline (GitHub Actions, GitLab CI, Jenkins).
-* **Developer-Centric**: Familiar and easy to distribute (`pip install muban-cli`).
+## Design Rationale
 
-### Core Design for Your CLI Tool
+### Python CLI
 
-Here’s a suggested structure and key commands for your `muban-cli` tool:
+* **Portability**: Runs on Windows, macOS, and Linux, covering all Jaspersoft Studio environments.
+* **Automation-Friendly**: Callable from shell scripts, Git hooks, and CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins).
+* **Developer-Centric**: Distributed via `pip install muban-cli`.
 
-**1. Authentication & Configuration**
-Users should authenticate once, and the CLI should store credentials securely.
+## Core Design
+
+### Authentication & Configuration
+
+Users authenticate once, and the CLI stores credentials securely.
 
 ```bash
-# Example setup flow
 muban configure --api-key "YOUR_MUBAN_API_KEY" --server "https://api.muban.me"
 ```
 
-**2. Essential Commands**
-Your CLI would map directly to your API's core functions:
+### Commands
+
+The CLI maps directly to the Muban API's core functions:
 
 | Command | Purpose | Example |
 | :--- | :--- | :--- |
@@ -31,51 +34,48 @@ Your CLI would map directly to your API's core functions:
 | `muban search <query>` | Search template names/descriptions. | `muban search "quarterly sales"` |
 | `muban delete <template_id>` | Remove a template. | `muban delete tpl_12345` |
 
-**3. Advanced CI/CD Integration**
-The real power is in scripting. A user's Git hook or CI/CD pipeline script could be as simple as:
+### CI/CD Integration
+
+The CLI integrates with Git hooks and CI/CD pipeline scripts:
 
 ```bash
 #!/bin/bash
-# A post-merge Git hook or CI/CD script
+# Post-merge Git hook or CI/CD script
 zip -r my_report.zip ./my_jasper_project/
 muban push my_report.zip --message "Deployed from commit ${CI_COMMIT_SHA}"
 ```
 
-### Implementation Blueprint
-
-Here is a conceptual structure for your Python project to get you started:
+## Project Structure
 
 ```text
 muban-cli/
 ├── muban_cli/
 │   ├── __init__.py
 │   ├── cli.py           # Main Click/Typer command definitions
-│   ├── api.py           # Client for your Muban REST API
-│   ├── auth.py          # Handles API key storage (use keyring lib)
+│   ├── api.py           # Client for the Muban REST API
+│   ├── auth.py          # Handles API key storage (uses keyring lib)
 │   └── utils.py         # Helpers for ZIP, config, etc.
 ├── pyproject.toml       # Project metadata and dependencies
-├── README.md            # Docs with setup and CI/CD examples
+├── README.md            # Documentation with setup and CI/CD examples
 └── tests/
 ```
 
-**Recommended Python Stack:**
+## Technology Stack
 
-* **CLI Framework**: **Typer** (built on Click) is modern and makes creating elegant CLIs very easy.
-* **HTTP Client**: **`httpx`** or **`requests`** for calling your API.
-* **Configuration**: Use **`pydantic`** with **`python-dotenv`** to manage settings in a `.mubanrc` file or environment variables.
-* **Distribution**: Package with **`setuptools`** or **`poetry`** and publish to **PyPI** so users can simply `pip install muban-cli`.
+* **CLI Framework**: Typer (built on Click)
+* **HTTP Client**: `httpx` or `requests`
+* **Configuration**: `pydantic` with `python-dotenv` for `.mubanrc` files and environment variables
+* **Distribution**: Packaged with `setuptools` or `poetry`, published to PyPI
 
-### Key Considerations for a Robust CLI
+## Design Principles
 
-1. **Idempotent Operations**: Ensure `muban push` is safe to run multiple times (e.g., by using a unique template identifier from the `.jrxml` file).
-2. **Detailed Logging & Verbose Mode**: Crucial for debugging in automated pipelines.
-3. **Non-Interactive Mode**: Support a `--yes` flag or rely on environment variables for fully automated runs in CI/CD.
-4. **Comprehensive Error Handling**: Return meaningful, actionable error codes for scripts to react to.
+1. **Idempotent Operations**: `muban push` is safe to run multiple times using unique template identifiers from `.jrxml` files.
+2. **Detailed Logging & Verbose Mode**: Supports debugging in automated pipelines.
+3. **Non-Interactive Mode**: Supports `--yes` flag and environment variables for fully automated CI/CD runs.
+4. **Comprehensive Error Handling**: Returns meaningful, actionable error codes for script integration.
 
-This CLI-centric approach puts you on a path where:
+## Target Users
 
-* **End-users** get a simple tool for manual template management.
-* **Corporations** get a scriptable component that slots perfectly into their approved Git/CI/CD workflows.
-* **You** maintain a single, clean codebase (the CLI and its backing API) instead of complex, client-specific integrations.
-
-Would you like a more detailed sketch of the `api.py` client class or an example `pyproject.toml` file to kickstart development?
+* **End-users**: Simple tool for manual template management.
+* **Corporations**: Scriptable component for approved Git/CI/CD workflows.
+* **Maintainers**: Single, clean codebase (CLI and backing API) without complex client-specific integrations.
