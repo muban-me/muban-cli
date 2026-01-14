@@ -72,9 +72,45 @@ def format_datetime(dt: Union[str, datetime, None]) -> str:
     
     if isinstance(dt, str):
         try:
-            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-        except ValueError:
-            return dt
+            # Handle various ISO formats
+            # Remove trailing 'Z' and normalize timezone
+            dt_str = dt.replace('Z', '+00:00')
+            
+            # Handle microseconds with varying precision (1-6 digits)
+            # Python's fromisoformat expects exactly 0, 3, or 6 decimal places
+            if 'T' in dt_str and '.' in dt_str:
+                # Split into datetime and timezone parts
+                if '+' in dt_str.split('.')[-1]:
+                    base, tz = dt_str.rsplit('+', 1)
+                    tz = '+' + tz
+                elif '-' in dt_str.split('.')[-1]:
+                    # Handle negative timezone offset
+                    parts = dt_str.rsplit('-', 1)
+                    if ':' in parts[-1]:  # It's a timezone, not a date separator
+                        base, tz = parts
+                        tz = '-' + tz
+                    else:
+                        base, tz = dt_str, ''
+                else:
+                    base, tz = dt_str, ''
+                
+                # Normalize microseconds to 6 digits
+                if '.' in base:
+                    dt_part, micro = base.rsplit('.', 1)
+                    micro = micro[:6].ljust(6, '0')  # Truncate or pad to 6 digits
+                    dt_str = f"{dt_part}.{micro}{tz}"
+                else:
+                    dt_str = base + tz
+            
+            dt = datetime.fromisoformat(dt_str)
+        except (ValueError, AttributeError):
+            # If all parsing fails, try to extract just the datetime part
+            try:
+                # Last resort: just parse the basic datetime part
+                dt_clean = dt.replace('T', ' ').split('.')[0].split('+')[0].split('Z')[0]
+                dt = datetime.strptime(dt_clean[:19], "%Y-%m-%d %H:%M:%S")
+            except (ValueError, AttributeError):
+                return dt  # Return original if nothing works
     
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -347,7 +383,7 @@ def format_audit_logs(logs: List[Dict[str, Any]], output_format: OutputFormat) -
         print_info("No audit logs found.")
         return
     
-    headers = ["Timestamp", "Event", "Severity", "User", "Success", "IP"]
+    headers = ["Timestamp", "Event", "Severity", "User", "Client ID", "Success", "IP"]
     rows = []
     
     for log in logs:
@@ -364,6 +400,7 @@ def format_audit_logs(logs: List[Dict[str, Any]], output_format: OutputFormat) -
             truncate_string(log.get("eventType", "-"), 25),
             click.style(severity, fg=severity_color),
             truncate_string(log.get("username", "-"), 15),
+            truncate_string(log.get("clientId", "-"), 15),
             "✓" if log.get("success") else "✗",
             log.get("ipAddress", "-"),
         ])

@@ -9,6 +9,7 @@ import click
 from ..api import MubanAPIClient
 from ..exceptions import MubanError, PermissionDeniedError
 from ..utils import (
+    format_datetime,
     print_error,
     print_json,
     print_success,
@@ -62,7 +63,8 @@ def register_user_commands(cli: click.Group) -> None:
                     roles = user_data.get('roles', [])
                     click.echo(f"  Roles:      {', '.join(roles) if roles else 'None'}")
                     click.echo(f"  Enabled:    {_format_bool(user_data.get('enabled', False))}")
-                    click.echo(f"  Created:    {user_data.get('createdAt', 'N/A')}")
+                    click.echo(f"  Created:    {format_datetime(user_data.get('created'))}")
+                    click.echo(f"  Last Login: {format_datetime(user_data.get('lastLogin'))}")
                     
         except MubanError as e:
             print_error(str(e))
@@ -189,14 +191,14 @@ def register_user_commands(cli: click.Group) -> None:
                     for user in users_list:
                         roles_list = user.get('roles', [])
                         roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
-                        created = user.get('created', user.get('createdAt', ''))
+                        created = user.get('created', '')
                         rows.append([
                             str(user.get('id', '')),
                             user.get('username', 'N/A'),
                             truncate_string(user.get('email', ''), 25),
                             roles_str,
                             _format_bool(user.get('enabled', False)),
-                            created[:10] if created else 'N/A'
+                            format_datetime(created)[:10] if created else 'N/A'
                         ])
                     
                     print_table(headers, rows)
@@ -239,8 +241,8 @@ def register_user_commands(cli: click.Group) -> None:
                     roles = user_data.get('roles', [])
                     click.echo(f"  Roles:      {', '.join(roles) if roles else 'None'}")
                     click.echo(f"  Enabled:    {_format_bool(user_data.get('enabled', False))}")
-                    click.echo(f"  Created:    {user_data.get('createdAt', 'N/A')}")
-                    click.echo(f"  Updated:    {user_data.get('updatedAt', 'N/A')}")
+                    click.echo(f"  Created:    {format_datetime(user_data.get('created'))}")
+                    click.echo(f"  Last Login: {format_datetime(user_data.get('lastLogin'))}")
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")
