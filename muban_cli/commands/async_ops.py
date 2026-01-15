@@ -116,9 +116,9 @@ def register_async_commands(cli: click.Group) -> None:
     @async_group.command('submit')
     @common_options
     @click.option('--template', '-t', required=True, help='Template ID')
-    @click.option('--format', '-F', 'output_fmt', default='PDF', 
+    @click.option('--doc-format', '-F', 'output_fmt', default='PDF', 
                   type=click.Choice(['PDF', 'DOCX', 'XLSX', 'HTML', 'CSV', 'XML', 'JSON', 'TEXT']),
-                  help='Output format')
+                  help='Document output format')
     @click.option('--param', '-p', multiple=True, help='Parameter in name=value format')
     @click.option('--data-file', '-d', type=click.Path(exists=True, path_type=Path),
                   help='JSON file with parameters')
