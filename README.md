@@ -13,6 +13,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
 - **Audit & Monitoring** - Access audit logs and security dashboards (admin)
+- **Multiple Output Formats** - Table, JSON, and CSV for easy data export
 - **Automation Ready** - Perfect for CI/CD pipelines with service account support
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
@@ -159,6 +160,7 @@ muban config-clear
 # List all templates
 muban list
 muban list --search "invoice" --format json
+muban list --format csv > templates.csv    # Export to CSV
 muban list --page 2 --size 50
 
 # Search templates
@@ -285,6 +287,7 @@ muban async bulk requests.json --batch-id batch-2026-01-15
 muban async list
 muban async list --status FAILED --since 1d
 muban async list --template TEMPLATE_ID --format json
+muban async list --format csv > async_jobs.csv    # Export to CSV
 
 # Get request details
 muban async get REQUEST_ID
@@ -323,6 +326,7 @@ muban async errors --since 24h
 muban audit logs
 muban audit logs --severity HIGH --since 1d
 muban audit logs --event-type LOGIN_FAILURE --format json
+muban audit logs --format csv > audit_export.csv    # Export to CSV
 
 # Get audit statistics
 muban audit statistics --since 7d
@@ -346,12 +350,31 @@ muban audit cleanup --yes
 
 All commands support these options:
 
-| Option      | Short | Description                   |
-|-------------|-------|-------------------------------|
-| `--verbose` | `-v`  | Enable verbose output         |
-| `--quiet`   | `-q`  | Suppress non-essential output |
-| `--format`  | `-f`  | Output format (table, json)   |
-| `--help`    |       | Show help message             |
+| Option       | Short | Description                                    |
+|--------------|-------|------------------------------------------------|
+| `--verbose`  | `-v`  | Enable verbose output                          |
+| `--quiet`    | `-q`  | Suppress non-essential output                  |
+| `--format`   | `-f`  | Output format: `table`, `json`, or `csv`       |
+| `--truncate` |       | Max string length in table output (0=no limit) |
+| `--help`     |       | Show help message                              |
+
+**Output Format Examples:**
+
+```bash
+# Table output (default) - human-readable with colors
+muban list
+
+# JSON output - for programmatic parsing
+muban list --format json
+
+# CSV output - for Excel/spreadsheet integration
+muban list --format csv > templates.csv
+muban audit logs --format csv > audit.csv
+
+# Control truncation in table output (default: 50 chars)
+muban list --truncate 80          # Longer strings
+muban audit logs --truncate 0     # No truncation
+```
 
 ## CI/CD Integration
 
