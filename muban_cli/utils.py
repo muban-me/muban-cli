@@ -213,6 +213,35 @@ def print_json(data: Any, indent: int = 2) -> None:
     click.echo(json.dumps(data, indent=indent, default=str))
 
 
+def print_csv(headers: List[str], rows: List[List[Any]]) -> None:
+    """
+    Print data as CSV format.
+    
+    Args:
+        headers: List of column headers
+        rows: List of row data (each row is a list of values)
+    """
+    import csv
+    import io
+    import re
+    
+    # ANSI escape code pattern for stripping colors
+    ansi_pattern = re.compile(r'\x1b\[[0-9;]*m')
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(headers)
+    
+    # Write rows, stripping any ANSI codes from cell values
+    for row in rows:
+        clean_row = [ansi_pattern.sub('', str(cell)) for cell in row]
+        writer.writerow(clean_row)
+    
+    click.echo(output.getvalue().rstrip())
+
+
 def print_success(message: str) -> None:
     """Print a success message."""
     click.secho(f"✓ {message}", fg="green")
@@ -249,13 +278,14 @@ def confirm_action(message: str, default: bool = False) -> bool:
     return click.confirm(message, default=default)
 
 
-def format_template_list(templates: List[Dict[str, Any]], output_format: OutputFormat) -> None:
+def format_template_list(templates: List[Dict[str, Any]], output_format: OutputFormat, truncate_length: int = 50) -> None:
     """
     Format and print template list.
     
     Args:
         templates: List of template dictionaries
         output_format: Output format
+        truncate_length: Max string length for table output (0=no truncation)
     """
     if output_format == OutputFormat.JSON:
         print_json(templates)
@@ -268,16 +298,36 @@ def format_template_list(templates: List[Dict[str, Any]], output_format: OutputF
     headers = ["ID", "Name", "Author", "Size", "Created"]
     rows = []
     
-    for tpl in templates:
-        rows.append([
-            truncate_string(tpl.get("id", "-"), 36),
-            truncate_string(tpl.get("name", "-"), 40),
-            truncate_string(tpl.get("author", "-"), 20),
-            format_file_size(tpl.get("fileSize")),
-            format_datetime(tpl.get("created")),
-        ])
-    
-    print_table(headers, rows)
+    # For CSV, don't truncate data
+    if output_format == OutputFormat.CSV:
+        for tpl in templates:
+            rows.append([
+                tpl.get("id", "-"),
+                tpl.get("name", "-"),
+                tpl.get("author", "-"),
+                format_file_size(tpl.get("fileSize")),
+                format_datetime(tpl.get("created")),
+            ])
+        print_csv(headers, rows)
+    else:
+        for tpl in templates:
+            if truncate_length > 0:
+                rows.append([
+                    truncate_string(tpl.get("id", "-"), 36),
+                    truncate_string(tpl.get("name", "-"), truncate_length),
+                    truncate_string(tpl.get("author", "-"), truncate_length),
+                    format_file_size(tpl.get("fileSize")),
+                    format_datetime(tpl.get("created")),
+                ])
+            else:
+                rows.append([
+                    tpl.get("id", "-"),
+                    tpl.get("name", "-"),
+                    tpl.get("author", "-"),
+                    format_file_size(tpl.get("fileSize")),
+                    format_datetime(tpl.get("created")),
+                ])
+        print_table(headers, rows)
 
 
 def format_template_detail(template: Dict[str, Any], output_format: OutputFormat) -> None:
@@ -306,13 +356,14 @@ def format_template_detail(template: Dict[str, Any], output_format: OutputFormat
         click.echo(f"  {template.get('metadata')}")
 
 
-def format_parameters(parameters: List[Dict[str, Any]], output_format: OutputFormat) -> None:
+def format_parameters(parameters: List[Dict[str, Any]], output_format: OutputFormat, truncate_length: int = 50) -> None:
     """
     Format and print template parameters.
     
     Args:
         parameters: List of parameter dictionaries
         output_format: Output format
+        truncate_length: Max string length for table output (0=no truncation)
     """
     if output_format == OutputFormat.JSON:
         print_json(parameters)
@@ -325,24 +376,43 @@ def format_parameters(parameters: List[Dict[str, Any]], output_format: OutputFor
     headers = ["Name", "Type", "Default", "Description"]
     rows = []
     
-    for param in parameters:
-        rows.append([
-            param.get("name", "-"),
-            param.get("type", "-"),
-            truncate_string(str(param.get("defaultValue", "-")), 20),
-            truncate_string(param.get("description", "-"), 40),
-        ])
-    
-    print_table(headers, rows)
+    # For CSV, don't truncate data
+    if output_format == OutputFormat.CSV:
+        for param in parameters:
+            rows.append([
+                param.get("name", "-"),
+                param.get("type", "-"),
+                str(param.get("defaultValue", "-")),
+                param.get("description", "-"),
+            ])
+        print_csv(headers, rows)
+    else:
+        for param in parameters:
+            if truncate_length > 0:
+                rows.append([
+                    param.get("name", "-"),
+                    param.get("type", "-"),
+                    truncate_string(str(param.get("defaultValue", "-")), truncate_length),
+                    truncate_string(param.get("description", "-"), truncate_length),
+                ])
+            else:
+                rows.append([
+                    param.get("name", "-"),
+                    param.get("type", "-"),
+                    str(param.get("defaultValue", "-")),
+                    param.get("description", "-"),
+                ])
+        print_table(headers, rows)
 
 
-def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat) -> None:
+def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat, truncate_length: int = 50) -> None:
     """
     Format and print template fields.
     
     Args:
         fields: List of field dictionaries
         output_format: Output format
+        truncate_length: Max string length for table output (0=no truncation)
     """
     if output_format == OutputFormat.JSON:
         print_json(fields)
@@ -355,25 +425,46 @@ def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat) -> 
     headers = ["Name", "Type", "Required", "Collection", "Description"]
     rows = []
     
-    for field in fields:
-        rows.append([
-            field.get("name", "-"),
-            field.get("type", "-"),
-            "Yes" if field.get("required") else "No",
-            field.get("collectionName", "-"),
-            truncate_string(field.get("description", "-"), 30),
-        ])
-    
-    print_table(headers, rows)
+    # For CSV, don't truncate data
+    if output_format == OutputFormat.CSV:
+        for field in fields:
+            rows.append([
+                field.get("name", "-"),
+                field.get("type", "-"),
+                "Yes" if field.get("required") else "No",
+                field.get("collectionName", "-"),
+                field.get("description", "-"),
+            ])
+        print_csv(headers, rows)
+    else:
+        for field in fields:
+            if truncate_length > 0:
+                rows.append([
+                    field.get("name", "-"),
+                    field.get("type", "-"),
+                    "Yes" if field.get("required") else "No",
+                    field.get("collectionName", "-"),
+                    truncate_string(field.get("description", "-"), truncate_length),
+                ])
+            else:
+                rows.append([
+                    field.get("name", "-"),
+                    field.get("type", "-"),
+                    "Yes" if field.get("required") else "No",
+                    field.get("collectionName", "-"),
+                    field.get("description", "-"),
+                ])
+        print_table(headers, rows)
 
 
-def format_audit_logs(logs: List[Dict[str, Any]], output_format: OutputFormat) -> None:
+def format_audit_logs(logs: List[Dict[str, Any]], output_format: OutputFormat, truncate_length: int = 50) -> None:
     """
     Format and print audit logs.
     
     Args:
         logs: List of audit log dictionaries
         output_format: Output format
+        truncate_length: Max string length for table output (0=no truncation)
     """
     if output_format == OutputFormat.JSON:
         print_json(logs)
@@ -386,26 +477,50 @@ def format_audit_logs(logs: List[Dict[str, Any]], output_format: OutputFormat) -
     headers = ["Timestamp", "Event", "Severity", "User", "Client ID", "Success", "IP"]
     rows = []
     
-    for log in logs:
-        severity = log.get("severity", "-")
-        severity_color = {
-            "CRITICAL": "red",
-            "HIGH": "yellow",
-            "MEDIUM": "blue",
-            "LOW": "green"
-        }.get(severity, "white")
-        
-        rows.append([
-            format_datetime(log.get("timestamp")),
-            truncate_string(log.get("eventType", "-"), 25),
-            click.style(severity, fg=severity_color),
-            truncate_string(log.get("username", "-"), 15),
-            truncate_string(log.get("clientId", "-"), 15),
-            "✓" if log.get("success") else "✗",
-            log.get("ipAddress", "-"),
-        ])
-    
-    print_table(headers, rows)
+    # For CSV, don't truncate data and use plain text
+    if output_format == OutputFormat.CSV:
+        for log in logs:
+            rows.append([
+                format_datetime(log.get("timestamp")),
+                log.get("eventType", "-"),
+                log.get("severity", "-"),
+                log.get("username", "-"),
+                log.get("clientId", "-"),
+                "Yes" if log.get("success") else "No",
+                log.get("ipAddress", "-"),
+            ])
+        print_csv(headers, rows)
+    else:
+        for log in logs:
+            severity = log.get("severity", "-")
+            severity_color = {
+                "CRITICAL": "red",
+                "HIGH": "yellow",
+                "MEDIUM": "blue",
+                "LOW": "green"
+            }.get(severity, "white")
+            
+            if truncate_length > 0:
+                rows.append([
+                    format_datetime(log.get("timestamp")),
+                    truncate_string(log.get("eventType", "-"), truncate_length),
+                    click.style(severity, fg=severity_color),
+                    truncate_string(log.get("username", "-"), truncate_length),
+                    truncate_string(log.get("clientId", "-"), truncate_length),
+                    "✓" if log.get("success") else "✗",
+                    log.get("ipAddress", "-"),
+                ])
+            else:
+                rows.append([
+                    format_datetime(log.get("timestamp")),
+                    log.get("eventType", "-"),
+                    click.style(severity, fg=severity_color),
+                    log.get("username", "-"),
+                    log.get("clientId", "-"),
+                    "✓" if log.get("success") else "✗",
+                    log.get("ipAddress", "-"),
+                ])
+        print_table(headers, rows)
 
 
 def parse_parameters(param_strings: List[str]) -> List[Dict[str, Any]]:

@@ -9,6 +9,7 @@ from ..api import MubanAPIClient
 from ..exceptions import MubanError
 from ..utils import (
     OutputFormat,
+    print_csv,
     print_error,
     print_json,
     print_table,
@@ -38,7 +39,6 @@ def register_resource_commands(cli: click.Group) -> None:
                     print_json(fonts)
                 else:
                     total = len(fonts)
-                    click.echo(f"\nFonts ({total} total):\n")
                     headers = ["Name", "Faces", "PDF Embedded"]
                     rows = []
                     for font in fonts:
@@ -47,7 +47,11 @@ def register_resource_commands(cli: click.Group) -> None:
                             ', '.join(font.get('faces', [])),
                             'Yes' if font.get('pdfEmbedded') else 'No'
                         ])
-                    print_table(headers, rows)
+                    if fmt == OutputFormat.CSV:
+                        print_csv(headers, rows)
+                    else:
+                        click.echo(f"\nFonts ({total} total):\n")
+                        print_table(headers, rows)
                     
         except MubanError as e:
             print_error(str(e))
@@ -69,6 +73,10 @@ def register_resource_commands(cli: click.Group) -> None:
                 
                 if fmt == OutputFormat.JSON:
                     print_json(profiles)
+                elif fmt == OutputFormat.CSV:
+                    headers = ["Profile Name"]
+                    rows = [[profile] for profile in profiles]
+                    print_csv(headers, rows)
                 else:
                     total = len(profiles)
                     click.echo(f"\nICC Profiles ({total} total):\n")

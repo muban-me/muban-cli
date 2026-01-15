@@ -15,6 +15,7 @@ from ..api import MubanAPIClient
 from ..exceptions import MubanError, PermissionDeniedError
 from ..utils import (
     OutputFormat,
+    print_csv,
     print_error,
     print_info,
     print_json,
@@ -76,7 +77,7 @@ def format_async_status(status: str) -> str:
     return click.style(status, fg=color_map.get(status, "white"))
 
 
-def format_async_requests_table(requests: List[dict], fmt: OutputFormat) -> None:
+def format_async_requests_table(requests: List[dict], fmt: OutputFormat, truncate_length: int = 50) -> None:
     """Format and print async requests table."""
     if fmt == OutputFormat.JSON:
         print_json(requests)
@@ -89,20 +90,43 @@ def format_async_requests_table(requests: List[dict], fmt: OutputFormat) -> None
     headers = ["Request ID", "Template", "Status", "User", "Created", "Elapsed"]
     rows = []
     
-    for req in requests:
-        elapsed = req.get("elapsedMs")
-        elapsed_str = f"{elapsed}ms" if elapsed else "-"
-        
-        rows.append([
-            truncate_string(str(req.get("requestId", "-")), 36),
-            truncate_string(str(req.get("templateId", "-")), 20),
-            format_async_status(req.get("status", "-")),
-            truncate_string(req.get("userId", "-"), 15),
-            format_datetime(req.get("createdAt"))[:16] if req.get("createdAt") else "-",
-            elapsed_str,
-        ])
-    
-    print_table(headers, rows)
+    # For CSV, don't truncate data
+    if fmt == OutputFormat.CSV:
+        for req in requests:
+            elapsed = req.get("elapsedMs")
+            elapsed_str = f"{elapsed}ms" if elapsed else "-"
+            rows.append([
+                str(req.get("requestId", "-")),
+                str(req.get("templateId", "-")),
+                req.get("status", "-"),
+                req.get("userId", "-"),
+                format_datetime(req.get("createdAt"))[:16] if req.get("createdAt") else "-",
+                elapsed_str,
+            ])
+        print_csv(headers, rows)
+    else:
+        for req in requests:
+            elapsed = req.get("elapsedMs")
+            elapsed_str = f"{elapsed}ms" if elapsed else "-"
+            if truncate_length > 0:
+                rows.append([
+                    truncate_string(str(req.get("requestId", "-")), 36),
+                    truncate_string(str(req.get("templateId", "-")), truncate_length),
+                    format_async_status(req.get("status", "-")),
+                    truncate_string(req.get("userId", "-"), truncate_length),
+                    format_datetime(req.get("createdAt"))[:16] if req.get("createdAt") else "-",
+                    elapsed_str,
+                ])
+            else:
+                rows.append([
+                    str(req.get("requestId", "-")),
+                    str(req.get("templateId", "-")),
+                    format_async_status(req.get("status", "-")),
+                    req.get("userId", "-"),
+                    format_datetime(req.get("createdAt"))[:16] if req.get("createdAt") else "-",
+                    elapsed_str,
+                ])
+        print_table(headers, rows)
 
 
 def register_async_commands(cli: click.Group) -> None:
@@ -297,6 +321,7 @@ def register_async_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         status: Optional[str],
         user: Optional[str],
         template: Optional[str],
@@ -339,7 +364,7 @@ def register_async_commands(cli: click.Group) -> None:
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nAsync Requests (Page {page}/{total_pages}, {total} total):\n")
                 
-                format_async_requests_table(requests_list, fmt)
+                format_async_requests_table(requests_list, fmt, truncate_length)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")
@@ -577,6 +602,7 @@ def register_async_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         since: Optional[str],
         page: int,
         size: int
@@ -605,7 +631,7 @@ def register_async_commands(cli: click.Group) -> None:
                 data = result.get('data', {})
                 requests_list = data.get('items', [])
                 
-                if not quiet and fmt != OutputFormat.JSON:
+                if not quiet and fmt == OutputFormat.TABLE:
                     total = data.get('totalItems', 0)
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nAsync Errors (Page {page}/{total_pages}, {total} total):\n")
@@ -617,15 +643,37 @@ def register_async_commands(cli: click.Group) -> None:
                 else:
                     headers = ["Request ID", "Template", "Status", "Error", "Time"]
                     rows = []
-                    for req in requests_list:
-                        rows.append([
-                            truncate_string(str(req.get("requestId", "-")), 20),
-                            truncate_string(str(req.get("templateId", "-")), 15),
-                            format_async_status(req.get("status", "-")),
-                            truncate_string(req.get("errorMessage", "-"), 30),
-                            format_datetime(req.get("completedAt"))[:16] if req.get("completedAt") else "-",
-                        ])
-                    print_table(headers, rows)
+                    # For CSV, don't truncate data
+                    if fmt == OutputFormat.CSV:
+                        for req in requests_list:
+                            rows.append([
+                                str(req.get("requestId", "-")),
+                                str(req.get("templateId", "-")),
+                                req.get("status", "-"),
+                                req.get("errorMessage", "-"),
+                                format_datetime(req.get("completedAt"))[:16] if req.get("completedAt") else "-",
+                            ])
+                        print_csv(headers, rows)
+                    elif truncate_length > 0:
+                        for req in requests_list:
+                            rows.append([
+                                truncate_string(str(req.get("requestId", "-")), 36),
+                                truncate_string(str(req.get("templateId", "-")), truncate_length),
+                                format_async_status(req.get("status", "-")),
+                                truncate_string(req.get("errorMessage", "-"), truncate_length),
+                                format_datetime(req.get("completedAt"))[:16] if req.get("completedAt") else "-",
+                            ])
+                        print_table(headers, rows)
+                    else:
+                        for req in requests_list:
+                            rows.append([
+                                str(req.get("requestId", "-")),
+                                str(req.get("templateId", "-")),
+                                format_async_status(req.get("status", "-")),
+                                req.get("errorMessage", "-"),
+                                format_datetime(req.get("completedAt"))[:16] if req.get("completedAt") else "-",
+                            ])
+                        print_table(headers, rows)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")

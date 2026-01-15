@@ -10,6 +10,8 @@ from ..api import MubanAPIClient
 from ..exceptions import MubanError, PermissionDeniedError
 from ..utils import (
     format_datetime,
+    OutputFormat,
+    print_csv,
     print_error,
     print_json,
     print_success,
@@ -20,8 +22,10 @@ from ..utils import (
 from . import common_options, pass_context, require_config, MubanContext
 
 
-def _format_bool(value: bool) -> str:
-    """Format boolean value with color."""
+def _format_bool(value: bool, fmt: OutputFormat = OutputFormat.TABLE) -> str:
+    """Format boolean value with color (for table) or plain text (for CSV)."""
+    if fmt == OutputFormat.CSV:
+        return "Yes" if value else "No"
     return click.style("Yes", fg="green") if value else click.style("No", fg="red")
 
 
@@ -154,6 +158,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         page: int,
         size: int,
         search: Optional[str],
@@ -162,6 +167,7 @@ def register_user_commands(cli: click.Group) -> None:
     ):
         """List all users (admin only)."""
         setup_logging(verbose, quiet)
+        fmt = OutputFormat(output_format)
         
         try:
             with MubanAPIClient(ctx.config_manager.get()) as client:
@@ -173,7 +179,7 @@ def register_user_commands(cli: click.Group) -> None:
                     enabled=enabled
                 )
                 
-                if output_format == 'json':
+                if fmt == OutputFormat.JSON:
                     print_json(result)
                 else:
                     data = result.get('data', {})
@@ -188,25 +194,57 @@ def register_user_commands(cli: click.Group) -> None:
                     headers = ['ID', 'Username', 'Email', 'Roles', 'Enabled', 'Created']
                     rows: List[List[str]] = []
                     
-                    for user in users_list:
-                        roles_list = user.get('roles', [])
-                        roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
-                        created = user.get('created', '')
-                        rows.append([
-                            str(user.get('id', '')),
-                            user.get('username', 'N/A'),
-                            truncate_string(user.get('email', ''), 25),
-                            roles_str,
-                            _format_bool(user.get('enabled', False)),
-                            format_datetime(created)[:10] if created else 'N/A'
-                        ])
-                    
-                    # Pagination info - support both formats
-                    total = data.get('totalItems', data.get('totalElements', 0))
-                    total_pages = data.get('totalPages', 1)
-                    click.echo(f"\nUsers (Page {page}/{total_pages}, {total} total):\n")
-                    
-                    print_table(headers, rows)
+                    # For CSV, don't truncate data
+                    if fmt == OutputFormat.CSV:
+                        for user in users_list:
+                            roles_list = user.get('roles', [])
+                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            created = user.get('created', '')
+                            rows.append([
+                                str(user.get('id', '')),
+                                user.get('username', 'N/A'),
+                                user.get('email', ''),
+                                roles_str,
+                                'Yes' if user.get('enabled', False) else 'No',
+                                format_datetime(created)[:10] if created else 'N/A'
+                            ])
+                        print_csv(headers, rows)
+                    elif truncate_length > 0:
+                        for user in users_list:
+                            roles_list = user.get('roles', [])
+                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            created = user.get('created', '')
+                            rows.append([
+                                str(user.get('id', '')),
+                                user.get('username', 'N/A'),
+                                truncate_string(user.get('email', ''), truncate_length),
+                                roles_str,
+                                _format_bool(user.get('enabled', False), fmt),
+                                format_datetime(created)[:10] if created else 'N/A'
+                            ])
+                        # Pagination info - support both formats
+                        total = data.get('totalItems', data.get('totalElements', 0))
+                        total_pages = data.get('totalPages', 1)
+                        click.echo(f"\nUsers (Page {page}/{total_pages}, {total} total):\n")
+                        print_table(headers, rows)
+                    else:
+                        for user in users_list:
+                            roles_list = user.get('roles', [])
+                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            created = user.get('created', '')
+                            rows.append([
+                                str(user.get('id', '')),
+                                user.get('username', 'N/A'),
+                                user.get('email', ''),
+                                roles_str,
+                                _format_bool(user.get('enabled', False), fmt),
+                                format_datetime(created)[:10] if created else 'N/A'
+                            ])
+                        # Pagination info - support both formats
+                        total = data.get('totalItems', data.get('totalElements', 0))
+                        total_pages = data.get('totalPages', 1)
+                        click.echo(f"\nUsers (Page {page}/{total_pages}, {total} total):\n")
+                        print_table(headers, rows)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")

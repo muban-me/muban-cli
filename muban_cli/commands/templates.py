@@ -59,6 +59,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         page: int,
         size: int,
         search: Optional[str]
@@ -82,12 +83,12 @@ def register_template_commands(cli: click.Group) -> None:
                 data = result.get('data', {})
                 templates = data.get('items', [])
                 
-                if not quiet and fmt != OutputFormat.JSON:
+                if not quiet and fmt == OutputFormat.TABLE:
                     total = data.get('totalItems', 0)
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nTemplates (Page {page}/{total_pages}, {total} total):\n")
                 
-                format_template_list(templates, fmt)
+                format_template_list(templates, fmt, truncate_length)
                 
         except MubanError as e:
             print_error(str(e), e.details if hasattr(e, 'details') else None)
@@ -105,6 +106,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str,
         params: bool,
         fields: bool
@@ -134,14 +136,14 @@ def register_template_commands(cli: click.Group) -> None:
                     click.echo("\n--- Parameters ---")
                     params_result = client.get_template_parameters(template_id)
                     parameters = params_result.get('data', [])
-                    format_parameters(parameters, fmt)
+                    format_parameters(parameters, fmt, truncate_length)
                 
                 # Get fields if requested
                 if fields:
                     click.echo("\n--- Fields ---")
                     fields_result = client.get_template_fields(template_id)
                     field_list = fields_result.get('data', [])
-                    format_fields(field_list, fmt)
+                    format_fields(field_list, fmt, truncate_length)
                     
         except TemplateNotFoundError:
             print_error(f"Template not found: {template_id}")
@@ -313,6 +315,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         query: str,
         page: int,
         size: int
@@ -339,7 +342,7 @@ def register_template_commands(cli: click.Group) -> None:
                     total = data.get('totalItems', 0)
                     click.echo(f"\nSearch results for '{query}' ({total} found):\n")
                 
-                format_template_list(templates, fmt)
+                format_template_list(templates, fmt, truncate_length)
                 
         except MubanError as e:
             print_error(str(e))

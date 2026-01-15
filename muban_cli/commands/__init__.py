@@ -28,6 +28,7 @@ from ..utils import (
     print_error,
     print_info,
     print_json,
+    print_csv,
     print_table,
     OutputFormat,
     format_audit_logs,
@@ -73,9 +74,16 @@ def common_options(f):
     f = click.option(
         '-f', '--format',
         'output_format',
-        type=click.Choice(['table', 'json']),
+        type=click.Choice(['table', 'json', 'csv']),
         default='table',
         help='Output format'
+    )(f)
+    f = click.option(
+        '--truncate',
+        'truncate_length',
+        type=int,
+        default=50,
+        help='Max string length in table output (default: 50, 0=no truncation)'
     )(f)
     return f
 
@@ -114,6 +122,7 @@ __all__ = [
     'print_error',
     'print_info',
     'print_json',
+    'print_csv',
     'print_table',
     'format_audit_logs',
     'logger',

@@ -82,6 +82,7 @@ def register_audit_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         page: int,
         size: int,
         event_type: Optional[str],
@@ -129,7 +130,7 @@ def register_audit_commands(cli: click.Group) -> None:
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nAudit Logs (Page {page}/{total_pages}, {total} total):\n")
                 
-                format_audit_logs(logs, fmt)
+                format_audit_logs(logs, fmt, truncate_length)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")
@@ -181,6 +182,7 @@ def register_audit_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         page: int,
         size: int,
         since: Optional[str]
@@ -209,7 +211,7 @@ def register_audit_commands(cli: click.Group) -> None:
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nSecurity Events (Page {page}/{total_pages}, {total} total):\n")
                 
-                format_audit_logs(logs, fmt)
+                format_audit_logs(logs, fmt, truncate_length)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")

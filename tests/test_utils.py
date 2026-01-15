@@ -4,6 +4,7 @@ Tests for utility functions.
 
 from datetime import datetime
 
+import click
 import pytest
 
 from muban_cli.utils import (
@@ -13,6 +14,7 @@ from muban_cli.utils import (
     parse_parameters,
     load_json_file,
     is_uuid,
+    print_csv,
 )
 
 
@@ -147,3 +149,46 @@ class TestIsUuid:
     def test_uuid_case_insensitive(self):
         """Test UUID case insensitivity."""
         assert is_uuid("550E8400-E29B-41D4-A716-446655440000") is True
+
+
+class TestPrintCsv:
+    """Tests for print_csv function."""
+    
+    def test_basic_csv_output(self, capsys):
+        """Test basic CSV output."""
+        headers = ["Name", "Value"]
+        rows = [["foo", "bar"], ["baz", "qux"]]
+        print_csv(headers, rows)
+        captured = capsys.readouterr()
+        assert "Name,Value" in captured.out
+        assert "foo,bar" in captured.out
+        assert "baz,qux" in captured.out
+    
+    def test_csv_with_special_characters(self, capsys):
+        """Test CSV output with commas and quotes."""
+        headers = ["Name", "Description"]
+        rows = [["test", "has, comma"], ["other", 'has "quotes"']]
+        print_csv(headers, rows)
+        captured = capsys.readouterr()
+        # CSV should properly quote fields with special characters
+        assert "Name,Description" in captured.out
+        assert '"has, comma"' in captured.out
+    
+    def test_csv_strips_ansi_codes(self, capsys):
+        """Test CSV output strips ANSI color codes."""
+        headers = ["Status"]
+        colored_text = click.style("Active", fg="green")
+        rows = [[colored_text]]
+        print_csv(headers, rows)
+        captured = capsys.readouterr()
+        # Should contain "Active" without ANSI codes
+        assert "Active" in captured.out
+        assert "\x1b[" not in captured.out  # No ANSI escape codes
+    
+    def test_empty_rows(self, capsys):
+        """Test CSV output with no rows."""
+        headers = ["Col1", "Col2"]
+        rows = []
+        print_csv(headers, rows)
+        captured = capsys.readouterr()
+        assert "Col1,Col2" in captured.out
