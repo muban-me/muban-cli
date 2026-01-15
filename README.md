@@ -7,12 +7,13 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 ## Features
 
-- **Secure Authentication** - JWT token-based auth with credential login
+- **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
+- **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
 - **Audit & Monitoring** - Access audit logs and security dashboards (admin)
-- **Automation Ready** - Perfect for CI/CD pipelines and scripting
+- **Automation Ready** - Perfect for CI/CD pipelines with service account support
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## Installation
@@ -83,7 +84,9 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 | -------- | ----------- |
 | `MUBAN_TOKEN` | JWT Bearer token (obtained via `muban login`) |
 | `MUBAN_SERVER_URL` | API server URL (default: <https://api.muban.me>) |
-| `MUBAN_AUTH_SERVER_URL` | Auth server URL (if different from API server) |
+| `MUBAN_AUTH_SERVER_URL` | OAuth2/IdP token endpoint (if different from API server) |
+| `MUBAN_CLIENT_ID` | OAuth2 Client ID (for client credentials flow) |
+| `MUBAN_CLIENT_SECRET` | OAuth2 Client Secret (for client credentials flow) |
 | `MUBAN_TIMEOUT` | Request timeout in seconds |
 | `MUBAN_VERIFY_SSL` | Enable/disable SSL verification |
 | `MUBAN_CONFIG_DIR` | Custom configuration directory |
@@ -103,6 +106,16 @@ muban login --username admin@example.com
 
 # Login with custom server
 muban login --server https://api.muban.me
+
+# Login with OAuth2 Client Credentials (for CI/CD / service accounts)
+muban login --client-credentials
+muban login -c --client-id my-client --client-secret secret123
+
+# Login with external IdP (ADFS, Azure AD, Keycloak)
+muban login -c --auth-server https://adfs.company.com/adfs/oauth2/token
+
+# Skip SSL verification (development only)
+muban login --no-verify-ssl
 
 # Check authentication status (shows token expiry)
 muban whoami
@@ -257,6 +270,52 @@ muban admin regenerate-all-digests --yes
 muban admin server-config
 ```
 
+### Async Document Generation
+
+```bash
+# Submit a single async request
+muban async submit -t TEMPLATE_ID -F PDF -p title="Report"
+muban async submit -t TEMPLATE_ID -d params.json -c my-correlation-id
+
+# Submit bulk requests from JSON file
+muban async bulk requests.json
+muban async bulk requests.json --batch-id batch-2026-01-15
+
+# List async requests
+muban async list
+muban async list --status FAILED --since 1d
+muban async list --template TEMPLATE_ID --format json
+
+# Get request details
+muban async get REQUEST_ID
+
+# Monitor workers and metrics (admin)
+muban async workers
+muban async metrics
+muban async health
+
+# View error log
+muban async errors --since 24h
+```
+
+**Bulk Request File Format (requests.json):**
+
+```json
+[
+  {
+    "templateId": "abc123-uuid",
+    "format": "PDF",
+    "parameters": {"title": "Report 1"},
+    "correlationId": "req-001"
+  },
+  {
+    "templateId": "abc123-uuid",
+    "format": "XLSX",
+    "parameters": {"title": "Report 2"}
+  }
+]
+```
+
 ### Audit Commands
 
 ```bash
@@ -323,9 +382,11 @@ jobs:
       
       - name: Deploy Template
         env:
-          MUBAN_TOKEN: ${{ secrets.MUBAN_TOKEN }}
           MUBAN_SERVER_URL: https://api.muban.me
+          MUBAN_CLIENT_ID: ${{ secrets.MUBAN_CLIENT_ID }}
+          MUBAN_CLIENT_SECRET: ${{ secrets.MUBAN_CLIENT_SECRET }}
         run: |
+          muban login --client-credentials
           cd templates
           zip -r report.zip ./monthly_report/
           muban push report.zip --name "Monthly Report" --author "CI/CD"
@@ -342,11 +403,13 @@ deploy_template:
       - templates/**
   script:
     - pip install muban-cli
+    - muban login --client-credentials
     - cd templates && zip -r report.zip ./monthly_report/
     - muban push report.zip --name "Monthly Report" --author "GitLab CI"
   variables:
-    MUBAN_TOKEN: $MUBAN_TOKEN
     MUBAN_SERVER_URL: https://api.muban.me
+    MUBAN_CLIENT_ID: $MUBAN_CLIENT_ID
+    MUBAN_CLIENT_SECRET: $MUBAN_CLIENT_SECRET
 ```
 
 ### Shell Script Example
@@ -442,12 +505,21 @@ flake8 muban_cli
 muban-cli/
 ├── muban_cli/
 │   ├── __init__.py      # Package initialization
-│   ├── cli.py           # CLI commands (Click)
+│   ├── cli.py           # Main CLI entry point
 │   ├── api.py           # REST API client
+│   ├── auth.py          # Authentication (password + OAuth2)
 │   ├── config.py        # Configuration management
 │   ├── utils.py         # Utility functions
 │   ├── exceptions.py    # Custom exceptions
-│   └── py.typed         # PEP 561 marker
+│   ├── py.typed         # PEP 561 marker
+│   └── commands/        # Command modules
+│       ├── auth.py      # login, logout, whoami, refresh
+│       ├── templates.py # list, get, push, pull, delete
+│       ├── generate.py  # generate documents
+│       ├── async_ops.py # async job management
+│       ├── audit.py     # audit logs and monitoring
+│       ├── admin.py     # admin operations
+│       └── users.py     # user management
 ├── tests/               # Test suite
 ├── pyproject.toml       # Project configuration
 └── README.md            # Documentation
