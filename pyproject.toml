@@ -118,7 +118,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=muban_cli --cov-report=term-missing"
+addopts = "-ra -q"
 testpaths = [
     "tests",
 ]

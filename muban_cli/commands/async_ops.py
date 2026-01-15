@@ -607,7 +607,8 @@ def register_async_commands(cli: click.Group) -> None:
                 
                 if not quiet and fmt != OutputFormat.JSON:
                     total = data.get('totalItems', 0)
-                    click.echo(f"\nAsync Errors ({total} total):\n")
+                    total_pages = data.get('totalPages', 1)
+                    click.echo(f"\nAsync Errors (Page {page}/{total_pages}, {total} total):\n")
                 
                 if fmt == OutputFormat.JSON:
                     print_json(requests_list)

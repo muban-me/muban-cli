@@ -1069,7 +1069,7 @@ class MubanAPIClient:
         Returns:
             Bulk submission response with tracking IDs
         """
-        payload = {"requests": requests}
+        payload: Dict[str, Any] = {"requests": requests}
         if batch_correlation_id:
             payload["batchCorrelationId"] = batch_correlation_id
         return self._request("POST", "async/bulk", json_data=payload)
@@ -1101,7 +1101,7 @@ class MubanAPIClient:
         Returns:
             Paginated async requests
         """
-        params = {"page": page, "size": size}
+        params: Dict[str, Any] = {"page": page, "size": size}
         if status:
             params["status"] = status
         if user_id:
@@ -1159,7 +1159,7 @@ class MubanAPIClient:
         Returns:
             Paginated list of failed/timed-out async requests
         """
-        params = {"page": page, "size": size}
+        params: Dict[str, Any] = {"page": page, "size": size}
         if since:
             params["since"] = since.isoformat()
         return self._request("GET", "async/errors", params=params)

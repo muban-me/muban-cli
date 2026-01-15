@@ -126,7 +126,8 @@ def register_audit_commands(cli: click.Group) -> None:
                 
                 if not quiet and fmt != OutputFormat.JSON:
                     total = data.get('totalItems', 0)
-                    click.echo(f"\nAudit Logs ({total} total):\n")
+                    total_pages = data.get('totalPages', 1)
+                    click.echo(f"\nAudit Logs (Page {page}/{total_pages}, {total} total):\n")
                 
                 format_audit_logs(logs, fmt)
                     
@@ -204,7 +205,9 @@ def register_audit_commands(cli: click.Group) -> None:
                 logs = data.get('items', [])
                 
                 if not quiet and fmt != OutputFormat.JSON:
-                    click.echo("\nSecurity Events:\n")
+                    total = data.get('totalItems', 0)
+                    total_pages = data.get('totalPages', 1)
+                    click.echo(f"\nSecurity Events (Page {page}/{total_pages}, {total} total):\n")
                 
                 format_audit_logs(logs, fmt)
                     
@@ -292,7 +295,8 @@ def register_audit_commands(cli: click.Group) -> None:
                 if output_format == 'json':
                     print_json(events)
                 else:
-                    click.echo("\nAvailable Event Types:\n")
+                    total = len(events)
+                    click.echo(f"\nEvent Types ({total} total):\n")
                     for event in events:
                         click.echo(f"  • {event}")
                     

@@ -201,12 +201,12 @@ def register_user_commands(cli: click.Group) -> None:
                             format_datetime(created)[:10] if created else 'N/A'
                         ])
                     
-                    print_table(headers, rows)
-                    
                     # Pagination info - support both formats
                     total = data.get('totalItems', data.get('totalElements', 0))
                     total_pages = data.get('totalPages', 1)
-                    click.echo(f"\nPage {page} of {total_pages} ({total} total users)")
+                    click.echo(f"\nUsers (Page {page}/{total_pages}, {total} total):\n")
+                    
+                    print_table(headers, rows)
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")

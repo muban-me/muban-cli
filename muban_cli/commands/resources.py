@@ -37,7 +37,8 @@ def register_resource_commands(cli: click.Group) -> None:
                 if fmt == OutputFormat.JSON:
                     print_json(fonts)
                 else:
-                    click.echo("\nAvailable Fonts:\n")
+                    total = len(fonts)
+                    click.echo(f"\nFonts ({total} total):\n")
                     headers = ["Name", "Faces", "PDF Embedded"]
                     rows = []
                     for font in fonts:
@@ -69,7 +70,8 @@ def register_resource_commands(cli: click.Group) -> None:
                 if fmt == OutputFormat.JSON:
                     print_json(profiles)
                 else:
-                    click.echo("\nAvailable ICC Profiles:\n")
+                    total = len(profiles)
+                    click.echo(f"\nICC Profiles ({total} total):\n")
                     for profile in profiles:
                         click.echo(f"  • {profile}")
                     
