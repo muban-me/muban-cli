@@ -154,6 +154,7 @@ def register_async_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template: str,
         output_fmt: str,
         param: tuple,
@@ -238,6 +239,7 @@ def register_async_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         file: Path,
         batch_id: Optional[str]
     ):
@@ -383,6 +385,7 @@ def register_async_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         request_id: str
     ):
         """
@@ -440,7 +443,7 @@ def register_async_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def async_workers(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def async_workers(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """
         Get worker thread status (requires admin role).
         
@@ -485,7 +488,7 @@ def register_async_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def async_metrics(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def async_metrics(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """
         Get async metrics dashboard (requires admin role).
         
@@ -544,7 +547,7 @@ def register_async_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def async_health(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def async_health(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """
         Get async system health status (requires admin role).
         

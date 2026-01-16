@@ -52,6 +52,7 @@ def register_generate_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str,
         doc_format: str,
         output: Optional[Path],

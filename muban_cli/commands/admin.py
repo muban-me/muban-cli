@@ -37,6 +37,7 @@ def register_admin_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str
     ):
         """Verify template file integrity."""
@@ -72,6 +73,7 @@ def register_admin_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str
     ):
         """Regenerate integrity digest for a template."""
@@ -104,6 +106,7 @@ def register_admin_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         yes: bool
     ):
         """Regenerate integrity digests for all templates."""
@@ -135,7 +138,7 @@ def register_admin_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def server_config(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def server_config(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """Get server configuration."""
         setup_logging(verbose, quiet)
         

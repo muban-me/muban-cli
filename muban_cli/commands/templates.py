@@ -165,6 +165,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         file: Path,
         name: str,
         author: str,
@@ -230,6 +231,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str,
         output: Optional[Path]
     ):
@@ -270,6 +272,7 @@ def register_template_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         template_id: str,
         yes: bool
     ):

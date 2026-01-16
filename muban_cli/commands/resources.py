@@ -25,7 +25,7 @@ def register_resource_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def list_fonts(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def list_fonts(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """List available fonts for document generation."""
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)
@@ -61,7 +61,7 @@ def register_resource_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def list_icc_profiles(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def list_icc_profiles(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """List available ICC color profiles for PDF export."""
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)

@@ -29,6 +29,13 @@ def _format_bool(value: bool, fmt: OutputFormat = OutputFormat.TABLE) -> str:
     return click.style("Yes", fg="green") if value else click.style("No", fg="red")
 
 
+def _format_roles(roles: List[str]) -> str:
+    """Format roles list, stripping ROLE_ prefix for cleaner display."""
+    if not roles:
+        return "None"
+    return ', '.join(r.replace('ROLE_', '') for r in roles)
+
+
 def _format_title(title: str) -> str:
     """Format a title with styling."""
     return click.style(title, bold=True)
@@ -46,7 +53,7 @@ def register_user_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def user_me(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def user_me(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """Get current user profile."""
         setup_logging(verbose, quiet)
         
@@ -65,7 +72,7 @@ def register_user_commands(cli: click.Group) -> None:
                     click.echo(f"  First Name: {user_data.get('firstName', 'N/A')}")
                     click.echo(f"  Last Name:  {user_data.get('lastName', 'N/A')}")
                     roles = user_data.get('roles', [])
-                    click.echo(f"  Roles:      {', '.join(roles) if roles else 'None'}")
+                    click.echo(f"  Roles:      {_format_roles(roles)}")
                     click.echo(f"  Enabled:    {_format_bool(user_data.get('enabled', False))}")
                     click.echo(f"  Created:    {format_datetime(user_data.get('created'))}")
                     click.echo(f"  Last Login: {format_datetime(user_data.get('lastLogin'))}")
@@ -86,6 +93,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         email: Optional[str],
         first_name: Optional[str],
         last_name: Optional[str]
@@ -125,6 +133,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         current: str,
         new_password: str
     ):
@@ -198,7 +207,7 @@ def register_user_commands(cli: click.Group) -> None:
                     if fmt == OutputFormat.CSV:
                         for user in users_list:
                             roles_list = user.get('roles', [])
-                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            roles_str = _format_roles(roles_list)
                             created = user.get('created', '')
                             rows.append([
                                 str(user.get('id', '')),
@@ -212,7 +221,7 @@ def register_user_commands(cli: click.Group) -> None:
                     elif truncate_length > 0:
                         for user in users_list:
                             roles_list = user.get('roles', [])
-                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            roles_str = _format_roles(roles_list)
                             created = user.get('created', '')
                             rows.append([
                                 str(user.get('id', '')),
@@ -230,7 +239,7 @@ def register_user_commands(cli: click.Group) -> None:
                     else:
                         for user in users_list:
                             roles_list = user.get('roles', [])
-                            roles_str = ', '.join(r.replace('ROLE_', '') for r in roles_list)
+                            roles_str = _format_roles(roles_list)
                             created = user.get('created', '')
                             rows.append([
                                 str(user.get('id', '')),
@@ -258,7 +267,7 @@ def register_user_commands(cli: click.Group) -> None:
     @click.argument('user_id', type=str)
     @pass_context
     @require_config
-    def user_get(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, user_id: str):
+    def user_get(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int, user_id: str):
         """Get user details by ID (admin only)."""
         setup_logging(verbose, quiet)
         
@@ -277,7 +286,7 @@ def register_user_commands(cli: click.Group) -> None:
                     click.echo(f"  First Name: {user_data.get('firstName', 'N/A')}")
                     click.echo(f"  Last Name:  {user_data.get('lastName', 'N/A')}")
                     roles = user_data.get('roles', [])
-                    click.echo(f"  Roles:      {', '.join(roles) if roles else 'None'}")
+                    click.echo(f"  Roles:      {_format_roles(roles)}")
                     click.echo(f"  Enabled:    {_format_bool(user_data.get('enabled', False))}")
                     click.echo(f"  Created:    {format_datetime(user_data.get('created'))}")
                     click.echo(f"  Last Login: {format_datetime(user_data.get('lastLogin'))}")
@@ -307,6 +316,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         username: str,
         email: str,
         password: str,
@@ -356,6 +366,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         user_id: str,
         email: Optional[str],
         first_name: Optional[str],
@@ -396,6 +407,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         user_id: str,
         force: bool
     ):
@@ -439,6 +451,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         user_id: str,
         set_roles: Tuple[str, ...],
         add_roles: Tuple[str, ...]
@@ -510,6 +523,7 @@ def register_user_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         user_id: str,
         current: str,
         password: str
@@ -538,7 +552,7 @@ def register_user_commands(cli: click.Group) -> None:
     @click.argument('user_id', type=str)
     @pass_context
     @require_config
-    def user_enable(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, user_id: str):
+    def user_enable(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int, user_id: str):
         """Enable a user account (admin only)."""
         setup_logging(verbose, quiet)
         
@@ -563,7 +577,7 @@ def register_user_commands(cli: click.Group) -> None:
     @click.argument('user_id', type=str)
     @pass_context
     @require_config
-    def user_disable(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, user_id: str):
+    def user_disable(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int, user_id: str):
         """Disable a user account (admin only)."""
         setup_logging(verbose, quiet)
         

@@ -149,6 +149,7 @@ def register_audit_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         since: Optional[str]
     ):
         """Get audit statistics."""
@@ -224,7 +225,7 @@ def register_audit_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def audit_dashboard(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def audit_dashboard(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """Get audit dashboard overview."""
         setup_logging(verbose, quiet)
         
@@ -244,7 +245,7 @@ def register_audit_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def audit_threats(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def audit_threats(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """Get security threats summary."""
         setup_logging(verbose, quiet)
         
@@ -264,7 +265,7 @@ def register_audit_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def audit_health(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def audit_health(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """Check audit system health."""
         setup_logging(verbose, quiet)
         
@@ -285,7 +286,7 @@ def register_audit_commands(cli: click.Group) -> None:
     @common_options
     @pass_context
     @require_config
-    def audit_event_types(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str):
+    def audit_event_types(ctx: MubanContext, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """List available audit event types."""
         setup_logging(verbose, quiet)
         
@@ -319,6 +320,7 @@ def register_audit_commands(cli: click.Group) -> None:
         verbose: bool,
         quiet: bool,
         output_format: str,
+        truncate_length: int,
         yes: bool
     ):
         """Trigger audit log cleanup."""

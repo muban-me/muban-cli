@@ -314,3 +314,59 @@ class TestLogoutCommand:
         """Test logout help."""
         result = runner.invoke(cli, ['logout', '--help'])
         assert result.exit_code == 0
+
+
+class TestCommandSignatures:
+    """
+    Test that all commands with @common_options have correct function signatures.
+    
+    This catches bugs where a command uses @common_options decorator but the function
+    doesn't accept all parameters (like truncate_length).
+    
+    Uses inspect to check signatures directly - no network calls, instant execution.
+    """
+
+    def test_all_common_options_commands_accept_truncate_length(self):
+        """
+        Verify all commands using @common_options accept truncate_length parameter.
+        
+        This is a comprehensive test that inspects Click command signatures to ensure
+        they match what the common_options decorator provides.
+        """
+        import inspect
+        
+        # Get all commands from CLI
+        commands_to_check = []
+        
+        def collect_commands(group, prefix=""):
+            """Recursively collect all commands from a Click group."""
+            for name, cmd in group.commands.items():
+                full_name = f"{prefix} {name}".strip()
+                if hasattr(cmd, 'commands'):  # It's a group
+                    collect_commands(cmd, full_name)
+                else:
+                    commands_to_check.append((full_name, cmd))
+        
+        collect_commands(cli)
+        
+        # Commands that use @common_options should have these params
+        common_params = {'verbose', 'quiet', 'output_format', 'truncate_length'}
+        
+        errors = []
+        for cmd_name, cmd in commands_to_check:
+            # Get the callback function
+            callback = cmd.callback
+            if callback is None:
+                continue
+            
+            # Get function signature
+            sig = inspect.signature(callback)
+            param_names = set(sig.parameters.keys())
+            
+            # Check if this command uses common_options by checking for verbose/quiet
+            if 'verbose' in param_names and 'quiet' in param_names:
+                # This command uses @common_options, check for truncate_length
+                if 'truncate_length' not in param_names:
+                    errors.append(f"Command '{cmd_name}' uses @common_options but missing 'truncate_length' parameter")
+        
+        assert not errors, "Signature mismatches found:\n" + "\n".join(errors)
