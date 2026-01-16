@@ -5,7 +5,6 @@ Provides helpers for output formatting, file operations, and common tasks.
 """
 
 import json
-import sys
 import logging
 from datetime import datetime
 from pathlib import Path

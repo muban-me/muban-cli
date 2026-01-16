@@ -10,7 +10,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
 from .exceptions import ConfigurationError
 

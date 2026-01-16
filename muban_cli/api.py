@@ -6,7 +6,7 @@ Implements all REST API endpoints as defined in the OpenAPI specification.
 
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union, BinaryIO
+from typing import Optional, Dict, Any, List, Union
 from datetime import datetime
 from urllib.parse import urljoin
 

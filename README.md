@@ -346,6 +346,47 @@ muban audit event-types
 muban audit cleanup --yes
 ```
 
+### User Management
+
+```bash
+# View your own profile
+muban users me
+
+# Update your profile
+muban users update-me --email new@email.com --first-name John
+
+# Change your password
+muban users change-password
+
+# List all users (admin only)
+muban users list
+muban users list --search "john" --role ROLE_ADMIN
+muban users list --format csv > users.csv
+
+# Get user details (admin only)
+muban users get USER_ID
+
+# Create a new user (admin only)
+muban users create --username john --email john@example.com --role ROLE_USER
+
+# Update a user (admin only)
+muban users update USER_ID --email new@email.com
+
+# Delete a user (admin only)
+muban users delete USER_ID --yes
+
+# Manage user roles (admin only)
+muban users roles USER_ID --set ROLE_USER ROLE_MANAGER
+muban users roles USER_ID --add ROLE_ADMIN
+
+# Enable/disable user accounts (admin only)
+muban users enable USER_ID
+muban users disable USER_ID
+
+# Set user password (admin only)
+muban users set-password USER_ID
+```
+
 ### Common Options
 
 All commands support these options:
@@ -527,25 +568,39 @@ flake8 muban_cli
 ```text
 muban-cli/
 ├── muban_cli/
-│   ├── __init__.py      # Package initialization
+│   ├── __init__.py      # Package initialization, version info
+│   ├── __main__.py      # Entry point for python -m muban_cli
 │   ├── cli.py           # Main CLI entry point
 │   ├── api.py           # REST API client
 │   ├── auth.py          # Authentication (password + OAuth2)
 │   ├── config.py        # Configuration management
-│   ├── utils.py         # Utility functions
+│   ├── utils.py         # Utility functions (formatting, output)
 │   ├── exceptions.py    # Custom exceptions
 │   ├── py.typed         # PEP 561 marker
 │   └── commands/        # Command modules
+│       ├── __init__.py  # Common options decorator
 │       ├── auth.py      # login, logout, whoami, refresh
-│       ├── templates.py # list, get, push, pull, delete
+│       ├── templates.py # list, search, get, push, pull, delete
 │       ├── generate.py  # generate documents
 │       ├── async_ops.py # async job management
 │       ├── audit.py     # audit logs and monitoring
 │       ├── admin.py     # admin operations
-│       └── users.py     # user management
+│       ├── users.py     # user management
+│       ├── resources.py # fonts, icc-profiles
+│       └── settings.py  # configure, config-clear
 ├── tests/               # Test suite
+│   ├── conftest.py      # Test fixtures
+│   ├── test_api.py
+│   ├── test_auth.py
+│   ├── test_cli_simple.py
+│   ├── test_commands.py
+│   ├── test_config.py
+│   ├── test_exceptions.py
+│   └── test_utils.py
+├── docs/                # Documentation
 ├── pyproject.toml       # Project configuration
-└── README.md            # Documentation
+├── LICENSE              # MIT License
+└── README.md            # This file
 ```
 
 ## License
