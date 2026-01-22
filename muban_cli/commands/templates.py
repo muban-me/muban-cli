@@ -37,6 +37,7 @@ from ..exceptions import (
 from ..utils import (
     format_template_list,
     format_template_detail,
+    format_template_combined_csv,
     format_parameters,
     format_fields,
     confirm_action,
@@ -129,21 +130,43 @@ def register_template_commands(cli: click.Group) -> None:
                 result = client.get_template(template_id)
                 template = result.get('data', {})
                 
-                format_template_detail(template, fmt)
-                
                 # Get parameters if requested
+                parameters = None
                 if params:
-                    click.echo("\n--- Parameters ---")
                     params_result = client.get_template_parameters(template_id)
                     parameters = params_result.get('data', [])
-                    format_parameters(parameters, fmt, truncate_length)
                 
                 # Get fields if requested
+                field_list = None
                 if fields:
-                    click.echo("\n--- Fields ---")
                     fields_result = client.get_template_fields(template_id)
                     field_list = fields_result.get('data', [])
-                    format_fields(field_list, fmt, truncate_length)
+                
+                # For CSV, use unified tabular output
+                if fmt == OutputFormat.CSV:
+                    format_template_combined_csv(template, parameters, field_list)
+                elif fmt == OutputFormat.JSON:
+                    # For JSON, build a combined object if params or fields requested
+                    if params or fields:
+                        combined = dict(template)
+                        if parameters is not None:
+                            combined['parameters'] = parameters
+                        if field_list is not None:
+                            combined['fields'] = field_list
+                        print_json(combined)
+                    else:
+                        print_json(template)
+                else:
+                    # Standard output for TABLE
+                    format_template_detail(template, fmt)
+                    
+                    if params and parameters is not None:
+                        click.echo("\n--- Parameters ---")
+                        format_parameters(parameters, fmt, truncate_length)
+                    
+                    if fields and field_list is not None:
+                        click.echo("\n--- Fields ---")
+                        format_fields(field_list, fmt, truncate_length)
                     
         except TemplateNotFoundError:
             print_error(f"Template not found: {template_id}")
@@ -341,7 +364,7 @@ def register_template_commands(cli: click.Group) -> None:
                 data = result.get('data', {})
                 templates = data.get('items', [])
                 
-                if not quiet and fmt != OutputFormat.JSON:
+                if not quiet and fmt == OutputFormat.TABLE:
                     total = data.get('totalItems', 0)
                     click.echo(f"\nSearch results for '{query}' ({total} found):\n")
                 

@@ -294,21 +294,22 @@ def format_template_list(templates: List[Dict[str, Any]], output_format: OutputF
         print_info("No templates found.")
         return
     
-    headers = ["ID", "Name", "Author", "Size", "Created"]
     rows = []
     
-    # For CSV, don't truncate data
+    # For CSV, use raw numeric values for better Excel/data processing support
     if output_format == OutputFormat.CSV:
+        csv_headers = ["ID", "Name", "Author", "Size (bytes)", "Created"]
         for tpl in templates:
             rows.append([
                 tpl.get("id", "-"),
                 tpl.get("name", "-"),
                 tpl.get("author", "-"),
-                format_file_size(tpl.get("fileSize")),
+                tpl.get("fileSize", 0),  # Raw bytes for CSV
                 format_datetime(tpl.get("created")),
             ])
-        print_csv(headers, rows)
+        print_csv(csv_headers, rows)
     else:
+        headers = ["ID", "Name", "Author", "Size", "Created"]
         for tpl in templates:
             if truncate_length > 0:
                 rows.append([
@@ -353,6 +354,60 @@ def format_template_detail(template: Dict[str, Any], output_format: OutputFormat
     if template.get('metadata'):
         click.echo(f"\nMetadata:")
         click.echo(f"  {template.get('metadata')}")
+
+
+def format_template_combined_csv(
+    template: Dict[str, Any],
+    parameters: Optional[List[Dict[str, Any]]] = None,
+    fields: Optional[List[Dict[str, Any]]] = None
+) -> None:
+    """
+    Format template, parameters, and fields as a unified CSV table.
+    
+    Uses a Category column to distinguish between info, parameter, and field rows.
+    This provides Excel-friendly output with all data in a single table.
+    
+    Args:
+        template: Template dictionary
+        parameters: Optional list of parameter dictionaries
+        fields: Optional list of field dictionaries
+    """
+    headers = ["Category", "Name", "Type", "Value", "Description"]
+    rows: List[List[str]] = []
+    
+    # Add template info rows
+    rows.append(["info", "id", "String", template.get('id', '-'), "Template ID"])
+    rows.append(["info", "name", "String", template.get('name', '-'), "Template name"])
+    rows.append(["info", "author", "String", template.get('author', '-'), "Template author"])
+    rows.append(["info", "fileSize", "Integer", str(template.get('fileSize', 0)), "File size in bytes"])
+    rows.append(["info", "created", "DateTime", template.get('created', '-'), "Creation timestamp"])
+    rows.append(["info", "templatePath", "String", template.get('templatePath', '-'), "Server path"])
+    if template.get('metadata'):
+        rows.append(["info", "metadata", "String", template.get('metadata', ''), "Template description"])
+    
+    # Add parameter rows
+    if parameters:
+        for param in parameters:
+            rows.append([
+                "parameter",
+                param.get("name", "-"),
+                param.get("type", "-"),
+                str(param.get("defaultValue", "")),
+                param.get("description", "-"),
+            ])
+    
+    # Add field rows
+    if fields:
+        for field in fields:
+            rows.append([
+                "field",
+                field.get("name", "-"),
+                field.get("type", "-"),
+                "",  # Fields don't have a default value
+                field.get("description", "-"),
+            ])
+    
+    print_csv(headers, rows)
 
 
 def format_parameters(parameters: List[Dict[str, Any]], output_format: OutputFormat, truncate_length: int = 50) -> None:

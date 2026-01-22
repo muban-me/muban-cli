@@ -90,20 +90,20 @@ def format_async_requests_table(requests: List[dict], fmt: OutputFormat, truncat
     headers = ["Request ID", "Template", "Status", "User", "Created", "Elapsed"]
     rows = []
     
-    # For CSV, don't truncate data
+    # For CSV, use raw numeric values
     if fmt == OutputFormat.CSV:
+        csv_headers = ["Request ID", "Template", "Status", "User", "Created", "Elapsed (ms)"]
         for req in requests:
             elapsed = req.get("elapsedMs")
-            elapsed_str = f"{elapsed}ms" if elapsed else "-"
             rows.append([
                 str(req.get("requestId", "-")),
                 str(req.get("templateId", "-")),
                 req.get("status", "-"),
                 req.get("userId", "-"),
                 format_datetime(req.get("createdAt"))[:16] if req.get("createdAt") else "-",
-                elapsed_str,
+                elapsed if elapsed else "",  # Raw milliseconds for CSV
             ])
-        print_csv(headers, rows)
+        print_csv(csv_headers, rows)
     else:
         for req in requests:
             elapsed = req.get("elapsedMs")
@@ -361,7 +361,7 @@ def register_async_commands(cli: click.Group) -> None:
                 data = result.get('data', {})
                 requests_list = data.get('items', [])
                 
-                if not quiet and fmt != OutputFormat.JSON:
+                if not quiet and fmt == OutputFormat.TABLE:
                     total = data.get('totalItems', 0)
                     total_pages = data.get('totalPages', 1)
                     click.echo(f"\nAsync Requests (Page {page}/{total_pages}, {total} total):\n")

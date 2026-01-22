@@ -171,6 +171,12 @@ muban get TEMPLATE_ID
 muban get TEMPLATE_ID --params  # Show parameters
 muban get TEMPLATE_ID --fields  # Show fields
 
+# Export template details for Excel (CSV unified format)
+muban get TEMPLATE_ID --params --fields --format csv > template.csv
+
+# Export as single JSON object with nested parameters/fields
+muban get TEMPLATE_ID --params --fields --format json
+
 # Upload a template (ZIP format)
 muban push report.zip --name "Monthly Report" --author "John Doe"
 muban push invoice.zip -n "Invoice" -a "Finance Team" -m "Standard invoice template"
@@ -412,10 +418,23 @@ muban list --format json
 muban list --format csv > templates.csv
 muban audit logs --format csv > audit.csv
 
+# Template details with params/fields as unified CSV table
+# (columns: Category, Name, Type, Value, Description)
+muban get TEMPLATE_ID --params --fields --format csv > template.csv
+
+# Template details as single JSON object with nested arrays
+muban get TEMPLATE_ID --params --fields --format json
+
 # Control truncation in table output (default: 50 chars)
 muban list --truncate 80          # Longer strings
 muban audit logs --truncate 0     # No truncation
 ```
+
+**CSV Output Notes:**
+
+- All CSV output uses raw numeric values (bytes, milliseconds) for data processing
+- No pagination headers or decorative text in CSV output
+- The `get` command with `--format csv` outputs a unified table with all template info, parameters, and fields in a single Excel-friendly format
 
 ## CI/CD Integration
 
