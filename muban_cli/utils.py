@@ -421,7 +421,7 @@ def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat, tru
         print_info("No fields defined.")
         return
     
-    headers = ["Name", "Type", "Required", "Collection", "Description"]
+    headers = ["Name", "Type", "Description"]
     rows = []
     
     # For CSV, don't truncate data
@@ -430,8 +430,6 @@ def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat, tru
             rows.append([
                 field.get("name", "-"),
                 field.get("type", "-"),
-                "Yes" if field.get("required") else "No",
-                field.get("collectionName", "-"),
                 field.get("description", "-"),
             ])
         print_csv(headers, rows)
@@ -441,16 +439,12 @@ def format_fields(fields: List[Dict[str, Any]], output_format: OutputFormat, tru
                 rows.append([
                     field.get("name", "-"),
                     field.get("type", "-"),
-                    "Yes" if field.get("required") else "No",
-                    field.get("collectionName", "-"),
                     truncate_string(field.get("description", "-"), truncate_length),
                 ])
             else:
                 rows.append([
                     field.get("name", "-"),
                     field.get("type", "-"),
-                    "Yes" if field.get("required") else "No",
-                    field.get("collectionName", "-"),
                     field.get("description", "-"),
                 ])
         print_table(headers, rows)
