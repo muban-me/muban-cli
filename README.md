@@ -73,6 +73,21 @@ muban list
 muban generate TEMPLATE_ID -p title="Monthly Report" -p date="2025-01-08"
 ```
 
+## Unauthenticated Access
+
+If your Muban API server has authentication disabled (common in development or internal deployments), you can use the CLI without logging in:
+
+```bash
+# Configure the server only (no login required)
+muban configure --server http://localhost:8080
+
+# Start using the CLI immediately
+muban list
+muban generate TEMPLATE_ID -p name="Test"
+```
+
+The CLI automatically detects when no credentials are configured and sends requests without an `Authorization` header.
+
 ## Configuration
 
 ### Configuration File

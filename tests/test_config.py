@@ -45,14 +45,24 @@ class TestMubanConfig:
         assert config.verify_ssl is False
     
     def test_is_configured(self):
-        """Test is_configured method."""
-        # Not configured (no token)
-        config = MubanConfig()
+        """Test is_configured method (requires server URL only)."""
+        # Not configured (no server URL)
+        config = MubanConfig(server_url="")
         assert config.is_configured() is False
         
-        # Configured
-        config = MubanConfig(token="test-token")
+        # Configured (has server URL, no token is OK)
+        config = MubanConfig(server_url="https://api.muban.me")
         assert config.is_configured() is True
+    
+    def test_is_authenticated(self):
+        """Test is_authenticated method."""
+        # Not authenticated (no token)
+        config = MubanConfig()
+        assert config.is_authenticated() is False
+        
+        # Authenticated
+        config = MubanConfig(token="test-token")
+        assert config.is_authenticated() is True
     
     def test_to_dict(self):
         """Test configuration serialization."""

@@ -71,8 +71,12 @@ class MubanConfig:
         return cls(**filtered_data)
     
     def is_configured(self) -> bool:
-        """Check if the configuration has required settings."""
-        return bool(self.token and self.server_url)
+        """Check if the configuration has required settings (server URL)."""
+        return bool(self.server_url)
+    
+    def is_authenticated(self) -> bool:
+        """Check if authentication credentials are available."""
+        return bool(self.token)
     
     def is_token_expired(self) -> bool:
         """Check if the access token is expired or about to expire."""

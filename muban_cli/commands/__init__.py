@@ -89,7 +89,7 @@ def common_options(f):
 
 
 def require_config(f):
-    """Decorator to require valid configuration."""
+    """Decorator to require valid configuration (server URL configured)."""
     @click.pass_context
     @wraps(f)
     def wrapper(click_ctx, *args, **kwargs):
@@ -98,8 +98,8 @@ def require_config(f):
         
         if not config.is_configured():
             print_error(
-                "Muban CLI is not authenticated.",
-                f"Run '{__prog_name__} login' to authenticate with your credentials."
+                "Muban CLI is not configured.",
+                f"Run '{__prog_name__} configure' to set up your server URL."
             )
             sys.exit(1)
         
