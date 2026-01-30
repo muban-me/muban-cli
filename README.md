@@ -9,7 +9,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates
-- **Template Compilation** - Package JRXML templates with all dependencies (images, subreports) into ZIP
+- **Template Packaging** - Package JRXML templates with all dependencies (images, subreports) into ZIP
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
@@ -206,25 +206,25 @@ muban delete TEMPLATE_ID
 muban delete TEMPLATE_ID --yes  # Skip confirmation
 ```
 
-### Template Compilation (Packaging)
+### Template Packaging
 
-The `compile` command analyzes a JRXML template file and packages it with all its dependencies (images, subreports) into a ZIP file ready for upload.
+The `package` command analyzes a JRXML template file and packages it with all its dependencies (images, subreports) into a ZIP file ready for upload.
 
 ```bash
-# Compile a template (creates template.zip)
-muban compile template.jrxml
+# Package a template (creates template.zip)
+muban package template.jrxml
 
 # Specify output path
-muban compile template.jrxml -o package.zip
+muban package template.jrxml -o package.zip
 
 # Dry run - analyze without creating ZIP
-muban compile template.jrxml --dry-run
+muban package template.jrxml --dry-run
 
 # Verbose output - show all discovered assets
-muban compile template.jrxml --dry-run -v
+muban package template.jrxml --dry-run -v
 
 # Custom REPORTS_DIR parameter name
-muban compile template.jrxml --reports-dir-param TEMPLATE_PATH
+muban package template.jrxml --reports-dir-param TEMPLATE_PATH
 ```
 
 **Features:**
@@ -239,7 +239,7 @@ muban compile template.jrxml --reports-dir-param TEMPLATE_PATH
 **Example Output (verbose mode):**
 
 ```text
-ℹ Compiling: invoice.jrxml
+ℹ Packaging: invoice.jrxml
 ℹ Working directory: /projects/templates
 
 Main template:
@@ -262,8 +262,8 @@ Assets found: 8
 **Typical Workflow:**
 
 ```bash
-# 1. Compile the template
-muban compile my-report.jrxml -o my-report.zip
+# 1. Package the template
+muban package my-report.jrxml -o my-report.zip
 
 # 2. Upload to the server
 muban push my-report.zip --name "My Report" --author "Developer"

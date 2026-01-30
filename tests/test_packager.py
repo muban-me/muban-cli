@@ -1,5 +1,5 @@
 """
-Tests for the JRXML Template Compiler.
+Tests for the JRXML Template Packager.
 """
 
 import pytest
@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from muban_cli.compiler import JRXMLCompiler, AssetReference, CompilationResult
+from muban_cli.packager import JRXMLPackager, AssetReference, PackageResult
 
 
 @pytest.fixture
@@ -19,9 +19,9 @@ def temp_dir():
 
 
 @pytest.fixture
-def compiler():
-    """Create a JRXMLCompiler instance."""
-    return JRXMLCompiler()
+def packager():
+    """Create a JRXMLPackager (packager) instance."""
+    return JRXMLPackager()
 
 
 @pytest.fixture
@@ -87,31 +87,31 @@ def subreport_jrxml_content():
 '''
 
 
-class TestJRXMLCompilerPatterns:
+class TestJRXMLPackagerPatterns:
     """Test regex pattern matching."""
     
-    def test_asset_pattern_matches_simple_path(self, compiler):
+    def test_asset_pattern_matches_simple_path(self, packager):
         """Test ASSET_PATTERN matches simple asset paths."""
         content = '$P{REPORTS_DIR} + "assets/img/logo.png"'
-        match = compiler.ASSET_PATTERN.search(content)
+        match = packager.ASSET_PATTERN.search(content)
         
         assert match is not None
         assert match.group(1) == "REPORTS_DIR"
         assert match.group(2) == "assets/img/logo.png"
     
-    def test_asset_pattern_matches_various_extensions(self, compiler):
+    def test_asset_pattern_matches_various_extensions(self, packager):
         """Test ASSET_PATTERN matches various file extensions."""
         extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.jasper', '.jrxml']
         
         for ext in extensions:
             content = f'$P{{REPORTS_DIR}} + "assets/file{ext}"'
-            match = compiler.ASSET_PATTERN.search(content)
+            match = packager.ASSET_PATTERN.search(content)
             assert match is not None, f"Failed to match extension {ext}"
     
-    def test_dynamic_dir_pattern_matches_parameter(self, compiler):
+    def test_dynamic_dir_pattern_matches_parameter(self, packager):
         """Test DYNAMIC_DIR_PATTERN matches $P{} dynamic filename."""
         content = '$P{REPORTS_DIR} + "assets/img/faksymile/" + $P{filename}'
-        match = compiler.DYNAMIC_DIR_PATTERN.search(content)
+        match = packager.DYNAMIC_DIR_PATTERN.search(content)
         
         assert match is not None
         assert match.group(1) == "REPORTS_DIR"
@@ -119,100 +119,100 @@ class TestJRXMLCompilerPatterns:
         assert match.group(3) == "P"
         assert match.group(4) == "filename"
     
-    def test_dynamic_dir_pattern_matches_field(self, compiler):
+    def test_dynamic_dir_pattern_matches_field(self, packager):
         """Test DYNAMIC_DIR_PATTERN matches $F{} dynamic filename."""
         content = '$P{REPORTS_DIR} + "images/" + $F{imageName}'
-        match = compiler.DYNAMIC_DIR_PATTERN.search(content)
+        match = packager.DYNAMIC_DIR_PATTERN.search(content)
         
         assert match is not None
         assert match.group(3) == "F"
         assert match.group(4) == "imageName"
     
-    def test_dynamic_dir_pattern_matches_variable(self, compiler):
+    def test_dynamic_dir_pattern_matches_variable(self, packager):
         """Test DYNAMIC_DIR_PATTERN matches $V{} dynamic filename."""
         content = '$P{REPORTS_DIR} + "output/" + $V{generatedName}'
-        match = compiler.DYNAMIC_DIR_PATTERN.search(content)
+        match = packager.DYNAMIC_DIR_PATTERN.search(content)
         
         assert match is not None
         assert match.group(3) == "V"
         assert match.group(4) == "generatedName"
     
-    def test_reports_dir_default_pattern(self, compiler):
+    def test_reports_dir_default_pattern(self, packager):
         """Test REPORTS_DIR default value extraction."""
         content = '''
         <parameter name="REPORTS_DIR" class="java.lang.String">
             <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
         </parameter>
         '''
-        match = compiler.REPORTS_DIR_DEFAULT_PATTERN.search(content)
+        match = packager.REPORTS_DIR_DEFAULT_PATTERN.search(content)
         
         assert match is not None
         assert match.group(1) == "./"
     
-    def test_reports_dir_default_pattern_parent(self, compiler):
+    def test_reports_dir_default_pattern_parent(self, packager):
         """Test REPORTS_DIR default value extraction with parent path."""
         content = '''
         <parameter name="REPORTS_DIR" class="java.lang.String">
             <defaultValueExpression><![CDATA["../"]]></defaultValueExpression>
         </parameter>
         '''
-        match = compiler.REPORTS_DIR_DEFAULT_PATTERN.search(content)
+        match = packager.REPORTS_DIR_DEFAULT_PATTERN.search(content)
         
         assert match is not None
         assert match.group(1) == "../"
     
-    def test_has_literal_string_pattern(self, compiler):
+    def test_has_literal_string_pattern(self, packager):
         """Test HAS_LITERAL_STRING pattern."""
         # Should match
-        assert compiler.HAS_LITERAL_STRING.search('$P{DIR} + "path"') is not None
-        assert compiler.HAS_LITERAL_STRING.search('"literal"') is not None
+        assert packager.HAS_LITERAL_STRING.search('$P{DIR} + "path"') is not None
+        assert packager.HAS_LITERAL_STRING.search('"literal"') is not None
         
         # Should not match
-        assert compiler.HAS_LITERAL_STRING.search('$P{DIR} + $P{PATH}') is None
-        assert compiler.HAS_LITERAL_STRING.search('$F{imagePath}') is None
+        assert packager.HAS_LITERAL_STRING.search('$P{DIR} + $P{PATH}') is None
+        assert packager.HAS_LITERAL_STRING.search('$F{imagePath}') is None
 
 
 class TestAssetExtraction:
     """Test asset reference extraction from JRXML files."""
     
-    def test_extract_simple_assets(self, temp_dir, compiler, sample_jrxml_content):
+    def test_extract_simple_assets(self, temp_dir, packager, sample_jrxml_content):
         """Test extracting simple asset references."""
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         assert len(assets) == 2
         paths = [a.path for a in assets]
         assert "assets/img/logo.png" in paths
         assert "assets/img/banner.jpg" in paths
     
-    def test_extract_reports_dir_value(self, temp_dir, compiler, sample_jrxml_content):
+    def test_extract_reports_dir_value(self, temp_dir, packager, sample_jrxml_content):
         """Test REPORTS_DIR default value is extracted."""
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         # All assets should have reports_dir_value = "./"
         for asset in assets:
             assert asset.reports_dir_value == "./"
     
-    def test_extract_subreport_reports_dir_value(self, temp_dir, compiler, subreport_jrxml_content):
+    def test_extract_subreport_reports_dir_value(self, temp_dir, packager, subreport_jrxml_content):
         """Test REPORTS_DIR default value is extracted from subreport."""
         jrxml_path = temp_dir / "subreport.jrxml"
         jrxml_path.write_text(subreport_jrxml_content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         # All assets should have reports_dir_value = "../"
         for asset in assets:
             assert asset.reports_dir_value == "../"
     
-    def test_skip_non_reports_dir_params(self, temp_dir, compiler):
+    def test_skip_non_reports_dir_params(self, temp_dir, packager):
         """Test that non-REPORTS_DIR parameters are skipped."""
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -234,14 +234,14 @@ class TestAssetExtraction:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         # Only the REPORTS_DIR asset should be found
         assert len(assets) == 1
         assert assets[0].path == "real/asset.png"
     
-    def test_skip_url_assets(self, temp_dir, compiler):
+    def test_skip_url_assets(self, temp_dir, packager):
         """Test that URL assets are skipped."""
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -263,8 +263,8 @@ class TestAssetExtraction:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         # Only local asset should be found
         assert len(assets) == 1
@@ -274,7 +274,7 @@ class TestAssetExtraction:
         assert len(result.skipped_urls) == 1
         assert "https://example.com/image.png" in result.skipped_urls[0]
     
-    def test_detect_fully_dynamic_expressions(self, temp_dir, compiler):
+    def test_detect_fully_dynamic_expressions(self, temp_dir, packager):
         """Test that fully dynamic expressions are detected."""
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -293,8 +293,8 @@ class TestAssetExtraction:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        packager._extract_asset_references(jrxml_path, result)
         
         # Fully dynamic expression should be detected
         assert len(result.skipped_dynamic) == 1
@@ -303,7 +303,7 @@ class TestAssetExtraction:
 class TestRecursiveSubreportAnalysis:
     """Test recursive subreport analysis."""
     
-    def test_recursive_subreport_assets(self, temp_dir, compiler):
+    def test_recursive_subreport_assets(self, temp_dir, packager):
         """Test that assets from subreports are included."""
         # Create directory structure
         subreports_dir = temp_dir / "subreports"
@@ -354,7 +354,7 @@ class TestRecursiveSubreportAnalysis:
         (assets_dir / "nested-icon.png").write_bytes(b"dummy png")
         
         # Run compilation
-        result = compiler.compile(main_jrxml, dry_run=True)
+        result = packager.package(main_jrxml, dry_run=True)
         
         assert result.success
         paths = [a.path for a in result.assets_found]
@@ -363,7 +363,7 @@ class TestRecursiveSubreportAnalysis:
         assert "subreports/child.jasper" in paths
         assert "assets/img/nested-icon.png" in paths
     
-    def test_subreport_source_tracking(self, temp_dir, compiler):
+    def test_subreport_source_tracking(self, temp_dir, packager):
         """Test that subreport source is tracked for nested assets."""
         # Create directory structure
         subreports_dir = temp_dir / "subreports"
@@ -408,7 +408,7 @@ class TestRecursiveSubreportAnalysis:
         (subreports_dir / "sub.jasper").write_bytes(b"dummy")
         (assets_dir / "from-sub.png").write_bytes(b"dummy")
         
-        result = compiler.compile(main_jrxml, dry_run=True)
+        result = packager.package(main_jrxml, dry_run=True)
         
         # Find the nested asset
         nested_asset = next((a for a in result.assets_found if a.path == "assets/from-sub.png"), None)
@@ -419,7 +419,7 @@ class TestRecursiveSubreportAnalysis:
 class TestPOSIXPathNormalization:
     """Test POSIX-style path normalization."""
     
-    def test_double_slash_normalization(self, temp_dir, compiler):
+    def test_double_slash_normalization(self, temp_dir, packager):
         """Test that double slashes are normalized."""
         # Create structure where subreport uses "../" and asset starts with "/"
         subreports_dir = temp_dir / "subreports"
@@ -464,7 +464,7 @@ class TestPOSIXPathNormalization:
         (subreports_dir / "test.jasper").write_bytes(b"dummy")
         (img_dir / "logo.png").write_bytes(b"dummy png")
         
-        result = compiler.compile(main_jrxml, dry_run=True)
+        result = packager.package(main_jrxml, dry_run=True)
         
         assert result.success
         # The asset should be found and resolved correctly
@@ -478,7 +478,7 @@ class TestPOSIXPathNormalization:
 class TestDynamicDirectoryAssets:
     """Test dynamic directory asset handling."""
     
-    def test_dynamic_directory_includes_all_files(self, temp_dir, compiler):
+    def test_dynamic_directory_includes_all_files(self, temp_dir, packager):
         """Test that dynamic directories include all files."""
         # Create directory with multiple files
         faksymile_dir = temp_dir / "assets" / "img" / "faksymile"
@@ -506,7 +506,7 @@ class TestDynamicDirectoryAssets:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = compiler.compile(jrxml_path, dry_run=True)
+        result = packager.package(jrxml_path, dry_run=True)
         
         assert result.success
         # Should include all 3 files from the directory
@@ -516,7 +516,7 @@ class TestDynamicDirectoryAssets:
 class TestZIPCreation:
     """Test ZIP package creation."""
     
-    def test_create_zip_with_assets(self, temp_dir, compiler):
+    def test_create_zip_with_assets(self, temp_dir, packager):
         """Test creating a ZIP with assets."""
         # Create assets
         assets_dir = temp_dir / "assets" / "img"
@@ -546,7 +546,7 @@ class TestZIPCreation:
         jrxml_path.write_text(content, encoding='utf-8')
         
         output_path = temp_dir / "output.zip"
-        result = compiler.compile(jrxml_path, output_path)
+        result = packager.package(jrxml_path, output_path)
         
         assert result.success
         assert output_path.exists()
@@ -558,22 +558,22 @@ class TestZIPCreation:
             assert "assets/img/logo.png" in names
             assert "assets/img/icon.svg" in names
     
-    def test_dry_run_no_zip(self, temp_dir, compiler, sample_jrxml_content):
+    def test_dry_run_no_zip(self, temp_dir, packager, sample_jrxml_content):
         """Test that dry run doesn't create a ZIP file."""
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
         
         output_path = temp_dir / "output.zip"
-        result = compiler.compile(jrxml_path, output_path, dry_run=True)
+        result = packager.package(jrxml_path, output_path, dry_run=True)
         
         assert result.success
         assert not output_path.exists()
 
 
-class TestCompilationResult:
-    """Test CompilationResult tracking."""
+class TestPackageResult:
+    """Test PackageResult tracking."""
     
-    def test_missing_assets_tracked(self, temp_dir, compiler):
+    def test_missing_assets_tracked(self, temp_dir, packager):
         """Test that missing assets are tracked in result."""
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -592,13 +592,13 @@ class TestCompilationResult:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = compiler.compile(jrxml_path, dry_run=True)
+        result = packager.package(jrxml_path, dry_run=True)
         
         assert result.success  # Dry run still succeeds
         assert len(result.assets_missing) == 1
         assert result.assets_missing[0].path == "nonexistent/image.png"
     
-    def test_warnings_for_missing_assets(self, temp_dir, compiler):
+    def test_warnings_for_missing_assets(self, temp_dir, packager):
         """Test that warnings are generated for missing assets."""
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -617,7 +617,7 @@ class TestCompilationResult:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = compiler.compile(jrxml_path, dry_run=True)
+        result = packager.package(jrxml_path, dry_run=True)
         
         assert len(result.warnings) >= 1
         assert any("missing" in w.lower() or "not found" in w.lower() for w in result.warnings)
@@ -628,7 +628,7 @@ class TestCustomReportsDirParam:
     
     def test_custom_param_name(self, temp_dir):
         """Test using a custom parameter name instead of REPORTS_DIR."""
-        compiler = JRXMLCompiler(reports_dir_param="TEMPLATE_PATH")
+        packager = JRXMLPackager(reports_dir_param="TEMPLATE_PATH")
         
         content = '''<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport name="test">
@@ -650,8 +650,8 @@ class TestCustomReportsDirParam:
         jrxml_path = temp_dir / "test.jrxml"
         jrxml_path.write_text(content, encoding='utf-8')
         
-        result = CompilationResult(success=False)
-        assets = compiler._extract_asset_references(jrxml_path, result)
+        result = PackageResult(success=False)
+        assets = packager._extract_asset_references(jrxml_path, result)
         
         # Only TEMPLATE_PATH asset should be found
         assert len(assets) == 1

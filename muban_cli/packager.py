@@ -1,10 +1,10 @@
 """
-JRXML Template Compiler.
+JRXML Template Packager.
 
-This module provides functionality to compile a JRXML template and its dependencies
+This module provides functionality to package a JRXML template and its dependencies
 into a ZIP package suitable for uploading to the Muban Document Generation Service.
 
-The compiler:
+The packager:
 1. Parses the JRXML file to find asset references (images, subreports)
 2. Resolves asset paths relative to the JRXML file location
 3. Creates a ZIP archive preserving the directory structure
@@ -16,7 +16,6 @@ import logging
 from pathlib import Path
 from typing import List, Set, Tuple, Optional
 from dataclasses import dataclass, field
-from xml.etree import ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,8 @@ class AssetReference:
 
 
 @dataclass
-class CompilationResult:
-    """Result of a template compilation."""
+class PackageResult:
+    """Result of a template packaging operation."""
     success: bool
     output_path: Optional[Path] = None
     main_jrxml: Optional[Path] = None
@@ -49,19 +48,23 @@ class CompilationResult:
     warnings: List[str] = field(default_factory=list)
 
 
-class JRXMLCompiler:
+# Backward compatibility alias
+CompilationResult = PackageResult
+
+
+class JRXMLPackager:
     """
-    Compiles JRXML templates and their dependencies into a ZIP package.
+    Packages JRXML templates and their dependencies into a ZIP package.
     
-    The compiler automatically detects:
+    The packager automatically detects:
     - Image references using the configurable REPORTS_DIR parameter
     - Directory references with dynamic filenames (includes all files)
     - Subreport references (future)
     - Font files (future)
     
     Example usage:
-        compiler = JRXMLCompiler()
-        result = compiler.compile("template.jrxml", "output.zip")
+        packager = JRXMLPackager()
+        result = packager.package("template.jrxml", "output.zip")
         if result.success:
             print(f"Created: {result.output_path}")
         else:
@@ -112,7 +115,7 @@ class JRXMLCompiler:
     
     def __init__(self, reports_dir_param: str = "REPORTS_DIR"):
         """
-        Initialize the compiler.
+        Initialize the packager.
         
         Args:
             reports_dir_param: The parameter name used for the reports directory.
@@ -121,14 +124,14 @@ class JRXMLCompiler:
         self.reports_dir_param = reports_dir_param
         self._detected_params: Set[str] = set()
     
-    def compile(
+    def package(
         self,
         jrxml_path: Path,
         output_path: Optional[Path] = None,
         dry_run: bool = False
-    ) -> CompilationResult:
+    ) -> PackageResult:
         """
-        Compile a JRXML template into a ZIP package.
+        Package a JRXML template into a ZIP package.
         
         Args:
             jrxml_path: Path to the main JRXML file
@@ -136,9 +139,9 @@ class JRXMLCompiler:
             dry_run: If True, don't create ZIP, just analyze dependencies
             
         Returns:
-            CompilationResult with details about the compilation
+            PackageResult with details about the packaging operation
         """
-        result = CompilationResult(success=False)
+        result = PackageResult(success=False)
         
         # Validate input
         jrxml_path = Path(jrxml_path).resolve()
@@ -256,7 +259,7 @@ class JRXMLCompiler:
     def _extract_asset_references(
         self, 
         jrxml_path: Path,
-        result: CompilationResult
+        result: PackageResult
     ) -> List[AssetReference]:
         """
         Extract all asset references from a JRXML file.
@@ -385,7 +388,7 @@ class JRXMLCompiler:
         self,
         jrxml_path: Path,
         base_dir: Path,
-        result: CompilationResult,
+        result: PackageResult,
         processed_files: Set[Path]
     ) -> List[AssetReference]:
         """
@@ -398,7 +401,7 @@ class JRXMLCompiler:
         Args:
             jrxml_path: Path to the JRXML file to analyze
             base_dir: Base directory for resolving relative paths
-            result: CompilationResult to accumulate warnings/errors
+            result: PackageResult to accumulate warnings/errors
             processed_files: Set of already processed files to prevent loops
             
         Returns:
@@ -480,23 +483,27 @@ class JRXMLCompiler:
         
         logger.info(f"Created ZIP: {output_path}")
     
-    def analyze(self, jrxml_path: Path) -> CompilationResult:
+    def analyze(self, jrxml_path: Path) -> PackageResult:
         """
         Analyze a JRXML file without creating a ZIP.
         
-        This is equivalent to compile() with dry_run=True.
+        This is equivalent to package() with dry_run=True.
         """
-        return self.compile(jrxml_path, dry_run=True)
+        return self.package(jrxml_path, dry_run=True)
 
 
-def compile_template(
+# Backward compatibility alias
+JRXMLCompiler = JRXMLPackager
+
+
+def package_template(
     jrxml_path: Path,
     output_path: Optional[Path] = None,
     dry_run: bool = False,
     reports_dir_param: str = "REPORTS_DIR"
-) -> CompilationResult:
+) -> PackageResult:
     """
-    Convenience function to compile a JRXML template.
+    Convenience function to package a JRXML template.
     
     Args:
         jrxml_path: Path to the main JRXML file
@@ -505,7 +512,11 @@ def compile_template(
         reports_dir_param: The parameter name used for the reports directory
         
     Returns:
-        CompilationResult with details about the compilation
+        PackageResult with details about the packaging operation
     """
-    compiler = JRXMLCompiler(reports_dir_param=reports_dir_param)
-    return compiler.compile(jrxml_path, output_path, dry_run)
+    packager = JRXMLPackager(reports_dir_param=reports_dir_param)
+    return packager.package(jrxml_path, output_path, dry_run)
+
+
+# Backward compatibility alias
+compile_template = package_template

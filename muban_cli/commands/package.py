@@ -1,7 +1,7 @@
 """
-Template compilation commands.
+Template packaging commands.
 
-This module provides commands for compiling JRXML templates into
+This module provides commands for packaging JRXML templates into
 deployable ZIP packages.
 """
 
@@ -9,11 +9,11 @@ import click
 from pathlib import Path
 from typing import Optional
 
-from ..compiler import JRXMLCompiler, CompilationResult
+from ..packager import JRXMLPackager, PackageResult
 from ..utils import print_success, print_error, print_warning, print_info
 
 
-@click.command('compile')
+@click.command('package')
 @click.argument('jrxml_file', type=click.Path(exists=True, path_type=Path))
 @click.option(
     '-o', '--output',
@@ -35,7 +35,7 @@ from ..utils import print_success, print_error, print_warning, print_info
     default='REPORTS_DIR',
     help='Name of the path parameter in JRXML (default: REPORTS_DIR)'
 )
-def compile_cmd(
+def package_cmd(
     jrxml_file: Path,
     output: Optional[Path],
     dry_run: bool,
@@ -43,7 +43,7 @@ def compile_cmd(
     reports_dir_param: str
 ):
     """
-    Compile a JRXML template into a deployable ZIP package.
+    Package a JRXML template into a deployable ZIP package.
     
     This command analyzes the JRXML file to find all referenced assets
     (images, subreports) and packages them together in a ZIP file
@@ -51,20 +51,20 @@ def compile_cmd(
     
     \b
     Examples:
-      # Basic compilation (creates template.zip)
-      muban compile template.jrxml
+      # Basic packaging (creates template.zip)
+      muban package template.jrxml
       
       # Specify output file
-      muban compile template.jrxml -o my-package.zip
+      muban package template.jrxml -o my-package.zip
       
       # Preview what would be included (no ZIP created)
-      muban compile template.jrxml --dry-run
+      muban package template.jrxml --dry-run
       
       # Use custom path parameter name
-      muban compile template.jrxml --reports-dir-param BASE_PATH
+      muban package template.jrxml --reports-dir-param BASE_PATH
     
     \b
-    The compiler automatically:
+    The packager automatically:
       - Detects image references (PNG, JPG, SVG, etc.)
       - Detects dynamic directories (includes all files)
       - Preserves the asset directory structure
@@ -74,12 +74,12 @@ def compile_cmd(
     jrxml_file = jrxml_file.resolve()
     
     if verbose:
-        print_info(f"Compiling: {jrxml_file.name}")
+        print_info(f"Packaging: {jrxml_file.name}")
         print_info(f"Working directory: {jrxml_file.parent}")
     
-    # Create compiler and run
-    compiler = JRXMLCompiler(reports_dir_param=reports_dir_param)
-    result = compiler.compile(jrxml_file, output, dry_run=dry_run)
+    # Create packager and run
+    packager = JRXMLPackager(reports_dir_param=reports_dir_param)
+    result = packager.package(jrxml_file, output, dry_run=dry_run)
     
     # Display results
     _display_result(result, verbose, dry_run)
@@ -89,8 +89,8 @@ def compile_cmd(
         raise SystemExit(1)
 
 
-def _display_result(result: CompilationResult, verbose: bool, dry_run: bool):
-    """Display compilation results to the user."""
+def _display_result(result: PackageResult, verbose: bool, dry_run: bool):
+    """Display packaging results to the user."""
     
     # Build a set of included asset paths for quick lookup
     included_paths = set()
@@ -213,9 +213,9 @@ def _display_result(result: CompilationResult, verbose: bool, dry_run: bool):
                     size_str = f"{size / (1024 * 1024):.1f} MB"
                 click.echo(f"  Size: {size_str}")
     else:
-        print_error("Compilation failed.")
+        print_error("Packaging failed.")
 
 
-def register_compile_commands(cli):
-    """Register compile commands with the CLI."""
-    cli.add_command(compile_cmd)
+def register_package_commands(cli):
+    """Register package commands with the CLI."""
+    cli.add_command(package_cmd)
