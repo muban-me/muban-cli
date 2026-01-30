@@ -86,6 +86,9 @@ class JRXMLCompiler:
     # Subreport extensions
     SUBREPORT_EXTENSIONS = {'.jasper', '.jrxml'}
     
+    # URL prefixes to skip (remote resources don't need packaging)
+    URL_PREFIXES = ('http://', 'https://', 'file://', 'ftp://')
+    
     def __init__(self, reports_dir_param: str = "REPORTS_DIR"):
         """
         Initialize the compiler.
@@ -265,6 +268,11 @@ class JRXMLCompiler:
             
             # Track detected parameter names
             self._detected_params.add(param_name)
+            
+            # Skip URLs - remote resources don't need packaging
+            if asset_path.lower().startswith(self.URL_PREFIXES):
+                logger.debug(f"Skipping remote URL: {asset_path}")
+                continue
             
             # Skip if this is part of a dynamic directory pattern we already found
             if asset_path.endswith('/') and asset_path in dynamic_dirs:
