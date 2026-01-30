@@ -66,6 +66,7 @@ def compile_cmd(
     \b
     The compiler automatically:
       - Detects image references (PNG, JPG, SVG, etc.)
+      - Detects dynamic directories (includes all files)
       - Preserves the asset directory structure
       - Warns about missing assets
     """
@@ -114,12 +115,24 @@ def _display_result(result: CompilationResult, verbose: bool, dry_run: bool):
         
         if verbose:
             for asset in result.assets_found:
-                # Normalize path for comparison
-                normalized_path = asset.path.replace('\\', '/')
-                if normalized_path in included_paths:
-                    click.echo(f"  ✓ {asset.path}")
+                if asset.is_dynamic_dir:
+                    # Count files included from this directory
+                    dir_prefix = asset.path.replace('\\', '/')
+                    files_from_dir = [p for p in included_paths if p.startswith(dir_prefix)]
+                    if files_from_dir:
+                        click.echo(click.style(
+                            f"  ✓ {asset.path}* (dynamic: {asset.dynamic_param}, {len(files_from_dir)} files included)",
+                            fg='cyan'
+                        ))
+                    else:
+                        click.echo(click.style(f"  ✗ {asset.path} (directory not found)", fg='yellow'))
                 else:
-                    click.echo(click.style(f"  ✗ {asset.path} (missing)", fg='yellow'))
+                    # Normalize path for comparison
+                    normalized_path = asset.path.replace('\\', '/')
+                    if normalized_path in included_paths:
+                        click.echo(f"  ✓ {asset.path}")
+                    else:
+                        click.echo(click.style(f"  ✗ {asset.path} (missing)", fg='yellow'))
         else:
             # Brief summary
             included_count = len(result.assets_included)

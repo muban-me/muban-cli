@@ -27,7 +27,9 @@ class AssetReference:
     path: str  # The path as written in the JRXML (e.g., "assets/img/logo.png")
     source_file: Path  # The JRXML file that contains this reference
     line_number: Optional[int] = None
-    asset_type: str = "image"  # "image", "subreport", "font", etc.
+    asset_type: str = "image"  # "image", "subreport", "font", "directory", etc.
+    is_dynamic_dir: bool = False  # True if this is a directory with dynamic filename
+    dynamic_param: Optional[str] = None  # The parameter name for dynamic filename
 
 
 @dataclass
@@ -49,6 +51,7 @@ class JRXMLCompiler:
     
     The compiler automatically detects:
     - Image references using the configurable REPORTS_DIR parameter
+    - Directory references with dynamic filenames (includes all files)
     - Subreport references (future)
     - Font files (future)
     
@@ -63,10 +66,17 @@ class JRXMLCompiler:
     """
     
     # Regex patterns for extracting asset paths
-    # Matches: $P{PARAM_NAME} + "path/to/asset"
-    # Where PARAM_NAME can be any valid Java identifier (e.g., REPORTS_DIR, BASE_PATH, etc.)
+    # Pattern 1: $P{PARAM_NAME} + "path/to/asset"
     ASSET_PATTERN = re.compile(
         r'\$P\{(\w+)\}\s*\+\s*"([^"]+)"',
+        re.MULTILINE
+    )
+    
+    # Pattern 2: $P{PARAM_NAME} + "path/to/dir/" + $P|$F|$V{OTHER_PARAM}
+    # This detects directory references where the filename is dynamic
+    # Supports: $P{} (parameters), $F{} (fields), $V{} (variables)
+    DYNAMIC_DIR_PATTERN = re.compile(
+        r'\$P\{(\w+)\}\s*\+\s*"([^"]+/)"\s*\+\s*\$([PFV])\{([^}]+)\}',
         re.MULTILINE
     )
     
@@ -145,7 +155,30 @@ class JRXMLCompiler:
         for asset in assets:
             asset_abs_path = (base_dir / asset.path).resolve()
             
-            if asset_abs_path.exists():
+            if asset.is_dynamic_dir:
+                # This is a directory with dynamic filename - include all files
+                if asset_abs_path.exists() and asset_abs_path.is_dir():
+                    dir_files = list(asset_abs_path.iterdir())
+                    file_count = 0
+                    for file_path in dir_files:
+                        if file_path.is_file():
+                            # Build relative path for archive
+                            rel_path = asset.path + file_path.name
+                            assets_to_include.append((file_path, rel_path))
+                            result.assets_included.append(file_path)
+                            file_count += 1
+                    
+                    # Add warning about dynamic asset inclusion
+                    result.warnings.append(
+                        f"Dynamic asset: {asset.path}* (filename from {asset.dynamic_param}) - "
+                        f"included all {file_count} files from directory"
+                    )
+                else:
+                    result.assets_missing.append(asset)
+                    result.warnings.append(
+                        f"Directory not found: {asset.path} (referenced in {asset.source_file.name})"
+                    )
+            elif asset_abs_path.exists():
                 result.assets_included.append(asset_abs_path)
                 # Keep the relative path as-is for the archive
                 assets_to_include.append((asset_abs_path, asset.path))
@@ -180,20 +213,62 @@ class JRXMLCompiler:
         
         This method parses the JRXML and finds all expressions that reference
         external files using a path parameter (like REPORTS_DIR).
+        
+        It also detects dynamic directory patterns like:
+            $P{REPORTS_DIR} + "assets/img/faksymile/" + $P{filename_param}
+            $P{REPORTS_DIR} + "assets/img/faksymile/" + $F{filename_field}
+            $P{REPORTS_DIR} + "assets/img/faksymile/" + $V{filename_variable}
         """
         assets: List[AssetReference] = []
         seen_paths: Set[str] = set()
+        dynamic_dirs: Set[str] = set()  # Track directories with dynamic filenames
         
         # Read the file content for regex parsing
         content = jrxml_path.read_text(encoding='utf-8')
         
-        # Find all matches
+        # First, find dynamic directory patterns (path + "/" + $P|$F|$V{param})
+        for match in self.DYNAMIC_DIR_PATTERN.finditer(content):
+            param_name = match.group(1)
+            dir_path = match.group(2)  # Path ending with /
+            expr_type = match.group(3)  # P, F, or V
+            dynamic_param = match.group(4)  # The parameter/field/variable name
+            
+            # Build the full expression reference (e.g., $P{name}, $F{name}, $V{name})
+            expr_prefix = {"P": "$P", "F": "$F", "V": "$V"}.get(expr_type, "$P")
+            dynamic_expr = f"{expr_prefix}{{{dynamic_param}}}"
+            
+            # Track detected parameter names
+            self._detected_params.add(param_name)
+            
+            # Skip duplicates
+            if dir_path in seen_paths:
+                continue
+            seen_paths.add(dir_path)
+            dynamic_dirs.add(dir_path)
+            
+            # Calculate line number
+            line_number = content[:match.start()].count('\n') + 1
+            
+            assets.append(AssetReference(
+                path=dir_path,
+                source_file=jrxml_path,
+                line_number=line_number,
+                asset_type="directory",
+                is_dynamic_dir=True,
+                dynamic_param=dynamic_expr
+            ))
+        
+        # Then find regular asset patterns
         for match in self.ASSET_PATTERN.finditer(content):
             param_name = match.group(1)
             asset_path = match.group(2)
             
             # Track detected parameter names
             self._detected_params.add(param_name)
+            
+            # Skip if this is part of a dynamic directory pattern we already found
+            if asset_path.endswith('/') and asset_path in dynamic_dirs:
+                continue
             
             # Skip duplicates
             if asset_path in seen_paths:
