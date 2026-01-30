@@ -9,6 +9,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates
+- **Template Compilation** - Package JRXML templates with all dependencies (images, subreports) into ZIP
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
@@ -203,6 +204,69 @@ muban pull TEMPLATE_ID -o ./templates/report.zip
 # Delete a template
 muban delete TEMPLATE_ID
 muban delete TEMPLATE_ID --yes  # Skip confirmation
+```
+
+### Template Compilation (Packaging)
+
+The `compile` command analyzes a JRXML template file and packages it with all its dependencies (images, subreports) into a ZIP file ready for upload.
+
+```bash
+# Compile a template (creates template.zip)
+muban compile template.jrxml
+
+# Specify output path
+muban compile template.jrxml -o package.zip
+
+# Dry run - analyze without creating ZIP
+muban compile template.jrxml --dry-run
+
+# Verbose output - show all discovered assets
+muban compile template.jrxml --dry-run -v
+
+# Custom REPORTS_DIR parameter name
+muban compile template.jrxml --reports-dir-param TEMPLATE_PATH
+```
+
+**Features:**
+
+- **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports
+- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` files to include their dependencies
+- **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
+- **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
+- **URL Skipping** - Automatically skips remote resources (http://, https://, etc.)
+- **POSIX Path Handling** - Correctly handles path concatenation (e.g., `"../" + "/img"` → `"../img"`)
+
+**Example Output (verbose mode):**
+
+```text
+ℹ Compiling: invoice.jrxml
+ℹ Working directory: /projects/templates
+
+Main template:
+  invoice.jrxml
+
+Assets found: 8
+  ✓ subreports/header.jasper
+  ✓ subreports/footer.jasper
+  ✓ assets/img/logo.png
+  ✓ assets/img/signature.png [from subreports/header.jrxml]
+  ✓ assets/img/faksymile/* (dynamic: $P{signatureFile}, 3 files included)
+  ✗ assets/img/missing.png (missing)
+
+⚠ Dynamic asset: assets/img/faksymile/* - included all 3 files from directory
+⚠ Asset not found: assets/img/missing.png (referenced in invoice.jrxml)
+
+✓ Created: invoice.zip
+```
+
+**Typical Workflow:**
+
+```bash
+# 1. Compile the template
+muban compile my-report.jrxml -o my-report.zip
+
+# 2. Upload to the server
+muban push my-report.zip --name "My Report" --author "Developer"
 ```
 
 ### Document Generation
