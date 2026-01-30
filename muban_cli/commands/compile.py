@@ -144,6 +144,21 @@ def _display_result(result: CompilationResult, verbose: bool, dry_run: bool):
         click.echo()
         print_info("No external assets referenced in the template.")
     
+    # Show skipped remote URLs (verbose only)
+    if verbose and result.skipped_urls:
+        click.echo()
+        click.echo(click.style(f"Skipped remote URLs: {len(result.skipped_urls)}", bold=True))
+        for url in result.skipped_urls:
+            click.echo(click.style(f"  ⊘ {url}", fg='blue'))
+    
+    # Show skipped fully dynamic expressions (verbose only)
+    if verbose and result.skipped_dynamic:
+        click.echo()
+        click.echo(click.style(f"Skipped dynamic expressions: {len(result.skipped_dynamic)}", bold=True))
+        click.echo(click.style("  (Fully runtime-determined paths cannot be resolved at compile time)", fg='bright_black'))
+        for expr in result.skipped_dynamic:
+            click.echo(click.style(f"  ⊘ {expr}", fg='magenta'))
+    
     # Show warnings
     if result.warnings:
         click.echo()

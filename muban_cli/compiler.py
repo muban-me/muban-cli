@@ -41,6 +41,8 @@ class CompilationResult:
     assets_found: List[AssetReference] = field(default_factory=list)
     assets_missing: List[AssetReference] = field(default_factory=list)
     assets_included: List[Path] = field(default_factory=list)
+    skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
+    skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
@@ -79,6 +81,16 @@ class JRXMLCompiler:
         r'\$P\{(\w+)\}\s*\+\s*"([^"]+/)"\s*\+\s*\$([PFV])\{([^}]+)\}',
         re.MULTILINE
     )
+    
+    # Pattern 3: All image/subreport expressions - to detect fully dynamic ones
+    # We'll check if they contain a literal string; if not, they're fully dynamic
+    IMAGE_EXPRESSION_PATTERN = re.compile(
+        r'<element\s+kind="(?:image|subreport)"[^>]*>.*?<expression>\s*<!\[CDATA\[(.*?)\]\]>\s*</expression>',
+        re.MULTILINE | re.DOTALL
+    )
+    
+    # Pattern to check if an expression contains a literal string path
+    HAS_LITERAL_STRING = re.compile(r'"[^"]+"')
     
     # Common image extensions
     IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.bmp', '.tiff', '.tif'}
@@ -141,7 +153,7 @@ class JRXMLCompiler:
         
         # Parse JRXML and extract asset references
         try:
-            assets = self._extract_asset_references(jrxml_path)
+            assets = self._extract_asset_references(jrxml_path, result)
             result.assets_found = assets
         except Exception as e:
             result.errors.append(f"Failed to parse JRXML: {e}")
@@ -210,7 +222,11 @@ class JRXMLCompiler:
         
         return result
     
-    def _extract_asset_references(self, jrxml_path: Path) -> List[AssetReference]:
+    def _extract_asset_references(
+        self, 
+        jrxml_path: Path,
+        result: CompilationResult
+    ) -> List[AssetReference]:
         """
         Extract all asset references from a JRXML file.
         
@@ -221,6 +237,8 @@ class JRXMLCompiler:
             $P{REPORTS_DIR} + "assets/img/faksymile/" + $P{filename_param}
             $P{REPORTS_DIR} + "assets/img/faksymile/" + $F{filename_field}
             $P{REPORTS_DIR} + "assets/img/faksymile/" + $V{filename_variable}
+        
+        Fully dynamic paths (no literal string) are detected and reported.
         """
         assets: List[AssetReference] = []
         seen_paths: Set[str] = set()
@@ -228,6 +246,15 @@ class JRXMLCompiler:
         
         # Read the file content for regex parsing
         content = jrxml_path.read_text(encoding='utf-8')
+        
+        # Detect fully dynamic expressions (no literal path string - can't resolve)
+        # Find all image/subreport expressions and check if they have a literal string
+        for match in self.IMAGE_EXPRESSION_PATTERN.finditer(content):
+            expr = match.group(1).strip()
+            # If expression contains no literal string, it's fully dynamic
+            if not self.HAS_LITERAL_STRING.search(expr):
+                if expr not in result.skipped_dynamic:
+                    result.skipped_dynamic.append(expr)
         
         # First, find dynamic directory patterns (path + "/" + $P|$F|$V{param})
         for match in self.DYNAMIC_DIR_PATTERN.finditer(content):
@@ -271,6 +298,8 @@ class JRXMLCompiler:
             
             # Skip URLs - remote resources don't need packaging
             if asset_path.lower().startswith(self.URL_PREFIXES):
+                if asset_path not in result.skipped_urls:
+                    result.skipped_urls.append(asset_path)
                 logger.debug(f"Skipping remote URL: {asset_path}")
                 continue
             
