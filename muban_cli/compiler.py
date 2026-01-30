@@ -30,6 +30,8 @@ class AssetReference:
     asset_type: str = "image"  # "image", "subreport", "font", "directory", etc.
     is_dynamic_dir: bool = False  # True if this is a directory with dynamic filename
     dynamic_param: Optional[str] = None  # The parameter name for dynamic filename
+    subreport_source: Optional[str] = None  # If from subreport, the subreport .jrxml path
+    reports_dir_value: str = "./"  # The REPORTS_DIR default value from the source file
 
 
 @dataclass
@@ -92,6 +94,13 @@ class JRXMLCompiler:
     # Pattern to check if an expression contains a literal string path
     HAS_LITERAL_STRING = re.compile(r'"[^"]+"')
     
+    # Pattern to extract REPORTS_DIR parameter default value
+    # Matches: <parameter name="REPORTS_DIR" ...><defaultValueExpression><![CDATA["value"]]></defaultValueExpression>
+    REPORTS_DIR_DEFAULT_PATTERN = re.compile(
+        r'<parameter\s+name="REPORTS_DIR"[^>]*>.*?<defaultValueExpression>\s*<!\[CDATA\["([^"]*)"\]\]>\s*</defaultValueExpression>',
+        re.MULTILINE | re.DOTALL
+    )
+    
     # Common image extensions
     IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.bmp', '.tiff', '.tif'}
     
@@ -151,9 +160,12 @@ class JRXMLCompiler:
         
         result.output_path = output_path
         
-        # Parse JRXML and extract asset references
+        # Parse JRXML and extract asset references (with recursive subreport analysis)
         try:
-            assets = self._extract_asset_references(jrxml_path, result)
+            processed_files: Set[Path] = set()  # Track processed files to avoid loops
+            assets = self._extract_asset_references_recursive(
+                jrxml_path, base_dir, result, processed_files
+            )
             result.assets_found = assets
         except Exception as e:
             result.errors.append(f"Failed to parse JRXML: {e}")
@@ -165,10 +177,29 @@ class JRXMLCompiler:
             logger.info(f"Detected path parameters: {params_str}")
         
         # Resolve asset paths and check existence
+        # Each asset is resolved relative to: source_file.parent / REPORTS_DIR / asset.path
         assets_to_include: List[Tuple[Path, str]] = []  # (absolute_path, archive_path)
         
         for asset in assets:
-            asset_abs_path = (base_dir / asset.path).resolve()
+            # Resolve path using the REPORTS_DIR value from the source file
+            # This simulates: cd source_file.parent && resolve REPORTS_DIR + asset.path
+            # Use string concatenation first (POSIX semantics: "../" + "/path" = "..//path" = "../path")
+            source_dir = asset.source_file.parent
+            combined_path = asset.reports_dir_value + asset.path
+            # Normalize double slashes (POSIX: // equals /)
+            while '//' in combined_path:
+                combined_path = combined_path.replace('//', '/')
+            # Also handle backslash version
+            while '\\\\' in combined_path:
+                combined_path = combined_path.replace('\\\\', '\\')
+            asset_abs_path = (source_dir / combined_path).resolve()
+            
+            # Calculate archive path (relative to main template root)
+            try:
+                archive_path = str(asset_abs_path.relative_to(base_dir)).replace('\\', '/')
+            except ValueError:
+                # Asset is outside main template directory - use asset.path as fallback
+                archive_path = asset.path.replace('\\', '/')
             
             if asset.is_dynamic_dir:
                 # This is a directory with dynamic filename - include all files
@@ -177,30 +208,30 @@ class JRXMLCompiler:
                     file_count = 0
                     for file_path in dir_files:
                         if file_path.is_file():
-                            # Build relative path for archive
-                            rel_path = asset.path + file_path.name
+                            # Build relative path for archive (based on effective dir path)
+                            rel_path = archive_path + "/" + file_path.name if archive_path else file_path.name
                             assets_to_include.append((file_path, rel_path))
                             result.assets_included.append(file_path)
                             file_count += 1
                     
                     # Add warning about dynamic asset inclusion
                     result.warnings.append(
-                        f"Dynamic asset: {asset.path}* (filename from {asset.dynamic_param}) - "
+                        f"Dynamic asset: {archive_path}* (filename from {asset.dynamic_param}) - "
                         f"included all {file_count} files from directory"
                     )
                 else:
                     result.assets_missing.append(asset)
                     result.warnings.append(
-                        f"Directory not found: {asset.path} (referenced in {asset.source_file.name})"
+                        f"Directory not found: {archive_path} (referenced in {asset.source_file.name})"
                     )
             elif asset_abs_path.exists():
                 result.assets_included.append(asset_abs_path)
-                # Keep the relative path as-is for the archive
-                assets_to_include.append((asset_abs_path, asset.path))
+                # Use the computed archive path (relative to main template root)
+                assets_to_include.append((asset_abs_path, archive_path))
             else:
                 result.assets_missing.append(asset)
                 result.warnings.append(
-                    f"Asset not found: {asset.path} (referenced in {asset.source_file.name})"
+                    f"Asset not found: {archive_path} (referenced in {asset.source_file.name})"
                 )
         
         # Report findings
@@ -247,6 +278,13 @@ class JRXMLCompiler:
         # Read the file content for regex parsing
         content = jrxml_path.read_text(encoding='utf-8')
         
+        # Extract REPORTS_DIR default value from this file
+        reports_dir_value = "./"  # Default fallback
+        reports_dir_match = self.REPORTS_DIR_DEFAULT_PATTERN.search(content)
+        if reports_dir_match:
+            reports_dir_value = reports_dir_match.group(1)
+            logger.debug(f"Found REPORTS_DIR default value: '{reports_dir_value}' in {jrxml_path.name}")
+        
         # Detect fully dynamic expressions (no literal path string - can't resolve)
         # Find all image/subreport expressions and check if they have a literal string
         for match in self.IMAGE_EXPRESSION_PATTERN.finditer(content):
@@ -262,6 +300,10 @@ class JRXMLCompiler:
             dir_path = match.group(2)  # Path ending with /
             expr_type = match.group(3)  # P, F, or V
             dynamic_param = match.group(4)  # The parameter/field/variable name
+            
+            # Only match if parameter is the reports directory parameter
+            if param_name != self.reports_dir_param:
+                continue
             
             # Build the full expression reference (e.g., $P{name}, $F{name}, $V{name})
             expr_prefix = {"P": "$P", "F": "$F", "V": "$V"}.get(expr_type, "$P")
@@ -285,13 +327,18 @@ class JRXMLCompiler:
                 line_number=line_number,
                 asset_type="directory",
                 is_dynamic_dir=True,
-                dynamic_param=dynamic_expr
+                dynamic_param=dynamic_expr,
+                reports_dir_value=reports_dir_value
             ))
         
         # Then find regular asset patterns
         for match in self.ASSET_PATTERN.finditer(content):
             param_name = match.group(1)
             asset_path = match.group(2)
+            
+            # Only match if parameter is the reports directory parameter
+            if param_name != self.reports_dir_param:
+                continue
             
             # Track detected parameter names
             self._detected_params.add(param_name)
@@ -328,11 +375,84 @@ class JRXMLCompiler:
                 path=asset_path,
                 source_file=jrxml_path,
                 line_number=line_number,
-                asset_type=asset_type
+                asset_type=asset_type,
+                reports_dir_value=reports_dir_value
             ))
         
         return assets
     
+    def _extract_asset_references_recursive(
+        self,
+        jrxml_path: Path,
+        base_dir: Path,
+        result: CompilationResult,
+        processed_files: Set[Path]
+    ) -> List[AssetReference]:
+        """
+        Recursively extract asset references from a JRXML file and its subreports.
+        
+        When a subreport reference (.jasper) is found, this method looks for
+        the corresponding .jrxml source file and recursively extracts its assets.
+        This ensures all nested assets from subreports are included in the package.
+        
+        Args:
+            jrxml_path: Path to the JRXML file to analyze
+            base_dir: Base directory for resolving relative paths
+            result: CompilationResult to accumulate warnings/errors
+            processed_files: Set of already processed files to prevent loops
+            
+        Returns:
+            List of all asset references (including those from subreports)
+        """
+        # Avoid infinite loops
+        resolved_path = jrxml_path.resolve()
+        if resolved_path in processed_files:
+            return []
+        processed_files.add(resolved_path)
+        
+        # Get direct assets from this file
+        assets = self._extract_asset_references(jrxml_path, result)
+        
+        # Find subreports and recursively analyze their source files
+        subreport_assets: List[AssetReference] = []
+        
+        for asset in assets:
+            if asset.asset_type == "subreport" and asset.path.endswith('.jasper'):
+                # Look for corresponding .jrxml file
+                jrxml_source_path = asset.path[:-7] + '.jrxml'  # Replace .jasper with .jrxml
+                jrxml_abs_path = (base_dir / jrxml_source_path).resolve()
+                
+                if jrxml_abs_path.exists():
+                    logger.debug(f"Analyzing subreport source: {jrxml_source_path}")
+                    
+                    # Recursively extract assets from subreport
+                    nested_assets = self._extract_asset_references_recursive(
+                        jrxml_abs_path, base_dir, result, processed_files
+                    )
+                    
+                    # Track subreport source for context
+                    for nested_asset in nested_assets:
+                        # Update source_file to show where the asset was found
+                        if nested_asset.source_file == jrxml_abs_path:
+                            nested_asset.subreport_source = jrxml_source_path
+                    
+                    subreport_assets.extend(nested_assets)
+                else:
+                    logger.debug(f"Subreport source not found: {jrxml_source_path}")
+        
+        # Combine and deduplicate
+        all_assets = assets + subreport_assets
+        
+        # Remove duplicates while preserving order
+        seen_paths: Set[str] = set()
+        unique_assets: List[AssetReference] = []
+        for asset in all_assets:
+            if asset.path not in seen_paths:
+                seen_paths.add(asset.path)
+                unique_assets.append(asset)
+        
+        return unique_assets
+
     def _create_zip(
         self,
         jrxml_path: Path,

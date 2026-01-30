@@ -115,24 +115,45 @@ def _display_result(result: CompilationResult, verbose: bool, dry_run: bool):
         
         if verbose:
             for asset in result.assets_found:
+                # Build source indicator for nested assets
+                source_indicator = ""
+                if asset.subreport_source:
+                    source_indicator = f" [from {asset.subreport_source}]"
+                
+                # Calculate effective path by simulating cd to source file's dir
+                # then applying REPORTS_DIR + asset path, normalized to main template root
+                # Use string concatenation (POSIX: "../" + "/path" = "..//path" = "../path")
+                if result.main_jrxml:
+                    source_dir = asset.source_file.parent
+                    combined = asset.reports_dir_value + asset.path
+                    # Normalize double slashes (POSIX semantics)
+                    while '//' in combined:
+                        combined = combined.replace('//', '/')
+                    resolved_abs = (source_dir / combined).resolve()
+                    try:
+                        effective_path = str(resolved_abs.relative_to(result.main_jrxml.parent)).replace('\\', '/')
+                    except ValueError:
+                        # Path is outside main template dir
+                        effective_path = str(resolved_abs).replace('\\', '/')
+                else:
+                    effective_path = (asset.reports_dir_value + asset.path).replace('\\', '/')
+                
                 if asset.is_dynamic_dir:
                     # Count files included from this directory
-                    dir_prefix = asset.path.replace('\\', '/')
-                    files_from_dir = [p for p in included_paths if p.startswith(dir_prefix)]
+                    files_from_dir = [p for p in included_paths if p.startswith(effective_path)]
                     if files_from_dir:
                         click.echo(click.style(
-                            f"  ✓ {asset.path}* (dynamic: {asset.dynamic_param}, {len(files_from_dir)} files included)",
+                            f"  ✓ {effective_path}* (dynamic: {asset.dynamic_param}, {len(files_from_dir)} files included){source_indicator}",
                             fg='cyan'
                         ))
                     else:
-                        click.echo(click.style(f"  ✗ {asset.path} (directory not found)", fg='yellow'))
+                        click.echo(click.style(f"  ✗ {effective_path} (directory not found){source_indicator}", fg='yellow'))
                 else:
-                    # Normalize path for comparison
-                    normalized_path = asset.path.replace('\\', '/')
-                    if normalized_path in included_paths:
-                        click.echo(f"  ✓ {asset.path}")
+                    # Check if effective path is in included paths
+                    if effective_path in included_paths:
+                        click.echo(f"  ✓ {effective_path}{source_indicator}")
                     else:
-                        click.echo(click.style(f"  ✗ {asset.path} (missing)", fg='yellow'))
+                        click.echo(click.style(f"  ✗ {effective_path} (missing){source_indicator}", fg='yellow'))
         else:
             # Brief summary
             included_count = len(result.assets_included)
