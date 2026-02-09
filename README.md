@@ -334,12 +334,17 @@ Or as a list:
 ### Utility Commands
 
 ```bash
-# List available fonts
+# List available server fonts (default)
 muban fonts
+
+# List all fonts including template-bundled ones
+muban fonts --show-all
 
 # List ICC color profiles (for PDF export)
 muban icc-profiles
 ```
+
+The `fonts` command shows server-installed fonts by default. Use `--show-all` to include fonts bundled with uploaded templates. When using `--show-all`, a "Source" column indicates whether each font comes from the server or a template.
 
 ### Admin Commands
 
