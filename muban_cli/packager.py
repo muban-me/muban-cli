@@ -8,16 +8,26 @@ The packager:
 1. Parses the JRXML file to find asset references (images, subreports)
 2. Resolves asset paths relative to the JRXML file location
 3. Creates a ZIP archive preserving the directory structure
+4. Optionally bundles custom fonts with fonts.xml configuration
 """
 
 import re
 import zipfile
 import logging
 from pathlib import Path
-from typing import List, Set, Tuple, Optional
+from typing import List, Set, Tuple, Optional, Dict
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FontSpec:
+    """Specification for a font to include in the package."""
+    file_path: Path  # Local path to the font file (TTF/OTF)
+    name: str  # Font family name as used in JRXML templates
+    face: str  # Font face: normal, bold, italic, boldItalic
+    embedded: bool = True  # Whether to embed in PDF output
 
 
 @dataclass
@@ -42,6 +52,7 @@ class PackageResult:
     assets_found: List[AssetReference] = field(default_factory=list)
     assets_missing: List[AssetReference] = field(default_factory=list)
     assets_included: List[Path] = field(default_factory=list)
+    fonts_included: List[FontSpec] = field(default_factory=list)  # Fonts bundled in package
     skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     errors: List[str] = field(default_factory=list)
@@ -128,7 +139,8 @@ class JRXMLPackager:
         self,
         jrxml_path: Path,
         output_path: Optional[Path] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
+        fonts: Optional[List[FontSpec]] = None
     ) -> PackageResult:
         """
         Package a JRXML template into a ZIP package.
@@ -137,11 +149,13 @@ class JRXMLPackager:
             jrxml_path: Path to the main JRXML file
             output_path: Output ZIP file path (default: <jrxml_name>.zip)
             dry_run: If True, don't create ZIP, just analyze dependencies
+            fonts: Optional list of FontSpec objects to include in the package
             
         Returns:
             PackageResult with details about the packaging operation
         """
         result = PackageResult(success=False)
+        fonts = fonts or []
         
         # Validate input
         jrxml_path = Path(jrxml_path).resolve()
@@ -242,13 +256,16 @@ class JRXMLPackager:
         logger.info(f"  - Included: {len(result.assets_included)}")
         logger.info(f"  - Missing: {len(result.assets_missing)}")
         
+        # Store fonts in result
+        result.fonts_included = fonts
+        
         if dry_run:
             result.success = True
             return result
         
         # Create ZIP archive
         try:
-            self._create_zip(jrxml_path, assets_to_include, output_path)
+            self._create_zip(jrxml_path, assets_to_include, output_path, fonts)
             result.success = True
         except Exception as e:
             result.errors.append(f"Failed to create ZIP: {e}")
@@ -460,14 +477,19 @@ class JRXMLPackager:
         self,
         jrxml_path: Path,
         assets: List[Tuple[Path, str]],
-        output_path: Path
+        output_path: Path,
+        fonts: Optional[List[FontSpec]] = None
     ) -> None:
         """
         Create a ZIP archive with the JRXML and its assets.
         
         The ZIP structure preserves the relative paths of assets
-        as they appear in the JRXML file.
+        as they appear in the JRXML file. If fonts are provided,
+        creates a fonts.xml configuration and includes font files
+        in a fonts/ directory.
         """
+        fonts = fonts or []
+        
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -480,8 +502,56 @@ class JRXMLPackager:
             for abs_path, archive_path in assets:
                 zf.write(abs_path, archive_path)
                 logger.debug(f"Added: {archive_path}")
+            
+            # Add fonts if provided
+            if fonts:
+                # Generate fonts.xml content
+                fonts_xml = self._generate_fonts_xml(fonts)
+                zf.writestr('fonts.xml', fonts_xml)
+                logger.debug("Added: fonts.xml")
+                
+                # Add font files to fonts/ directory
+                for font in fonts:
+                    archive_font_path = f"fonts/{font.file_path.name}"
+                    zf.write(font.file_path, archive_font_path)
+                    logger.debug(f"Added: {archive_font_path}")
         
         logger.info(f"Created ZIP: {output_path}")
+    
+    def _generate_fonts_xml(self, fonts: List[FontSpec]) -> str:
+        """
+        Generate fonts.xml content for JasperReports font configuration.
+        
+        Groups fonts by family name and generates proper XML structure.
+        """
+        # Group fonts by family name
+        families: Dict[str, List[FontSpec]] = {}
+        for font in fonts:
+            if font.name not in families:
+                families[font.name] = []
+            families[font.name].append(font)
+        
+        # Build XML
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<fontFamilies>']
+        
+        for family_name, family_fonts in families.items():
+            lines.append(f'    <fontFamily name="{family_name}">')
+            
+            # Add font faces
+            for font in family_fonts:
+                archive_path = f"fonts/{font.file_path.name}"
+                lines.append(f'        <{font.face}>{archive_path}</{font.face}>')
+            
+            # Add common properties (use first font's embedded setting)
+            lines.append('        <pdfEncoding>Identity-H</pdfEncoding>')
+            embedded_value = 'true' if family_fonts[0].embedded else 'false'
+            lines.append(f'        <pdfEmbedded>{embedded_value}</pdfEmbedded>')
+            
+            lines.append('    </fontFamily>')
+        
+        lines.append('</fontFamilies>')
+        
+        return '\n'.join(lines)
     
     def analyze(self, jrxml_path: Path) -> PackageResult:
         """

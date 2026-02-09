@@ -7,10 +7,15 @@ deployable ZIP packages.
 
 import click
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple, List
 
-from ..packager import JRXMLPackager, PackageResult
+from ..packager import JRXMLPackager, PackageResult, FontSpec
 from ..utils import print_success, print_error, print_warning, print_info
+
+
+def validate_font_options(ctx, param, value):
+    """Callback to validate font options are provided in matching sets."""
+    return value
 
 
 @click.command('package')
@@ -35,12 +40,41 @@ from ..utils import print_success, print_error, print_warning, print_info
     default='REPORTS_DIR',
     help='Name of the path parameter in JRXML (default: REPORTS_DIR)'
 )
+@click.option(
+    '--font-file',
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help='Path to font file (TTF/OTF). Can be repeated for multiple fonts.'
+)
+@click.option(
+    '--font-name',
+    multiple=True,
+    type=str,
+    help='Font family name as used in JRXML. Can be repeated.'
+)
+@click.option(
+    '--font-face',
+    multiple=True,
+    type=click.Choice(['normal', 'bold', 'italic', 'boldItalic']),
+    help='Font face type. Can be repeated.'
+)
+@click.option(
+    '--embedded/--no-embedded',
+    'font_embedded',
+    multiple=True,
+    default=None,
+    help='Whether font should be embedded in PDF. Can be repeated.'
+)
 def package_cmd(
     jrxml_file: Path,
     output: Optional[Path],
     dry_run: bool,
     verbose: bool,
-    reports_dir_param: str
+    reports_dir_param: str,
+    font_file: Tuple[Path, ...],
+    font_name: Tuple[str, ...],
+    font_face: Tuple[str, ...],
+    font_embedded: Tuple[bool, ...]
 ):
     """
     Package a JRXML template into a deployable ZIP package.
@@ -62,6 +96,11 @@ def package_cmd(
       
       # Use custom path parameter name
       muban package template.jrxml --reports-dir-param BASE_PATH
+      
+      # Include custom fonts in the package
+      muban package template.jrxml \\
+        --font-file Arial.ttf --font-name Arial --font-face normal --embedded \\
+        --font-file Arial_Bold.ttf --font-name Arial --font-face bold --embedded
     
     \b
     The packager automatically:
@@ -69,6 +108,11 @@ def package_cmd(
       - Detects dynamic directories (includes all files)
       - Preserves the asset directory structure
       - Warns about missing assets
+      
+    \b
+    Font options (--font-file, --font-name, --font-face, --embedded) must be
+    provided in matching sets. Multiple fonts with the same name are grouped
+    into a single font family with multiple faces.
     """
     # Resolve paths
     jrxml_file = jrxml_file.resolve()
@@ -77,20 +121,52 @@ def package_cmd(
         print_info(f"Packaging: {jrxml_file.name}")
         print_info(f"Working directory: {jrxml_file.parent}")
     
+    # Parse font options
+    fonts: List[FontSpec] = []
+    if font_file:
+        # Validate matching counts
+        counts = [len(font_file), len(font_name), len(font_face)]
+        if len(set(counts)) != 1:
+            print_error(
+                f"Font options count mismatch: "
+                f"--font-file ({len(font_file)}), "
+                f"--font-name ({len(font_name)}), "
+                f"--font-face ({len(font_face)})"
+            )
+            raise SystemExit(1)
+        
+        # Handle embedded flag - use True as default if not specified enough times
+        embedded_values = list(font_embedded) if font_embedded else []
+        while len(embedded_values) < len(font_file):
+            embedded_values.append(True)  # Default to embedded
+        
+        for i, (f_file, f_name, f_face) in enumerate(zip(font_file, font_name, font_face)):
+            fonts.append(FontSpec(
+                file_path=Path(f_file).resolve(),
+                name=f_name,
+                face=f_face,
+                embedded=embedded_values[i]
+            ))
+        
+        if verbose:
+            print_info(f"Including {len(fonts)} font file(s)")
+    
     # Create packager and run
     packager = JRXMLPackager(reports_dir_param=reports_dir_param)
-    result = packager.package(jrxml_file, output, dry_run=dry_run)
+    result = packager.package(jrxml_file, output, dry_run=dry_run, fonts=fonts)
     
     # Display results
-    _display_result(result, verbose, dry_run)
+    _display_result(result, verbose, dry_run, fonts)
     
     # Exit with appropriate code
     if not result.success:
         raise SystemExit(1)
 
 
-def _display_result(result: PackageResult, verbose: bool, dry_run: bool):
+def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: Optional[List[FontSpec]] = None):
     """Display packaging results to the user."""
+    
+    fonts = fonts or []
     
     # Build a set of included asset paths for quick lookup
     included_paths = set()
@@ -191,16 +267,35 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool):
         click.echo()
         for error in result.errors:
             print_error(error)
+    # Show fonts info
+    if fonts:
+        click.echo()
+        # Group by font family name
+        font_families = {}
+        for font in fonts:
+            if font.name not in font_families:
+                font_families[font.name] = []
+            font_families[font.name].append(font)
+        
+        click.echo(click.style(f"Fonts included: {len(font_families)} family(ies), {len(fonts)} file(s)", bold=True))
+        if verbose:
+            for family_name, family_fonts in font_families.items():
+                faces = [f.face for f in family_fonts]
+                embedded = family_fonts[0].embedded
+                click.echo(f"  ✓ {family_name} ({', '.join(faces)}) - {'embedded' if embedded else 'not embedded'}")
     
     # Final status
     click.echo()
     if result.success:
         if dry_run:
             print_info(f"Dry run complete. Would create: {result.output_path}")
+            if fonts:
+                print_info(f"Would include fonts.xml + {len(fonts)} font file(s)")
         else:
             total_assets = len(result.assets_included)
+            font_info = f" + {len(fonts)} fonts" if fonts else ""
             print_success(f"Package created: {result.output_path}")
-            click.echo(f"  Contents: 1 JRXML + {total_assets} assets")
+            click.echo(f"  Contents: 1 JRXML + {total_assets} assets{font_info}")
             
             # Show file size
             if result.output_path and result.output_path.exists():
