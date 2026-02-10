@@ -9,12 +9,14 @@ Or as module:
 """
 
 import sys
+from pathlib import Path
 
 
 def main():
     """Launch the Muban GUI application."""
     try:
         from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtGui import QIcon
     except ImportError:
         print("Error: PyQt6 is required for the GUI.", file=sys.stderr)
         print("Install with: pip install muban-cli[gui]", file=sys.stderr)
@@ -26,6 +28,11 @@ def main():
     app.setApplicationName("Muban")
     app.setOrganizationName("Muban")
     app.setOrganizationDomain("muban.me")
+
+    # Set application icon
+    icon_path = Path(__file__).parent / "resources" / "logo.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     window = MubanMainWindow()
     window.show()

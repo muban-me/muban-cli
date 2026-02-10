@@ -80,7 +80,7 @@ where = ["."]
 include = ["muban_cli*"]
 
 [tool.setuptools.package-data]
-muban_cli = ["py.typed"]
+muban_cli = ["py.typed", "gui/resources/*.png", "gui/resources/*.svg"]
 
 [tool.black]
 line-length = 100
