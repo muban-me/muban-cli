@@ -12,13 +12,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QFormLayout,
     QGroupBox,
-    QLabel,
     QLineEdit,
     QPushButton,
     QFileDialog,
     QTextEdit,
     QCheckBox,
-    QComboBox,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -124,8 +122,14 @@ class PackageTab(QWidget):
         self.fonts_table.setHorizontalHeaderLabels(["File", "Name", "Face", "Embedded"])
         header = self.fonts_table.horizontalHeader()
         if header:
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.fonts_table.setColumnWidth(0, 200)
+        self.fonts_table.setColumnWidth(1, 150)
+        self.fonts_table.setColumnWidth(2, 100)
+        self.fonts_table.setColumnWidth(3, 80)
         self.fonts_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         fonts_layout.addWidget(self.fonts_table)
 

@@ -2,11 +2,10 @@
 Settings Tab - Server configuration and authentication.
 """
 
-import time
 from datetime import datetime
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,

@@ -26,7 +26,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QSplitter,
     QCheckBox,
-    QScrollArea,
 )
 
 from muban_cli.api import MubanAPIClient

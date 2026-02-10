@@ -5,7 +5,7 @@ Templates Tab - List and manage templates on the server.
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QShowEvent
 from PyQt6.QtWidgets import (
     QWidget,
