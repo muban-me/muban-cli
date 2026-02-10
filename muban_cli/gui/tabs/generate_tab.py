@@ -25,6 +25,8 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QTextEdit,
     QSplitter,
+    QCheckBox,
+    QScrollArea,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -45,6 +47,8 @@ class GenerateWorker(QThread):
         output_format: str,
         parameters: Dict[str, Any],
         data: Optional[Dict[str, Any]] = None,
+        pdf_export_options: Optional[Dict[str, Any]] = None,
+        html_export_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.client = client
@@ -53,6 +57,8 @@ class GenerateWorker(QThread):
         self.output_format = output_format
         self.parameters = parameters
         self.data = data
+        self.pdf_export_options = pdf_export_options
+        self.html_export_options = html_export_options
 
     def run(self):
         try:
@@ -64,6 +70,8 @@ class GenerateWorker(QThread):
                 parameters=params_list,
                 output_path=self.output_path,
                 data=self.data,
+                pdf_export_options=self.pdf_export_options,
+                html_export_options=self.html_export_options,
             )
             self.finished.emit(str(self.output_path))
         except Exception as e:
@@ -129,6 +137,34 @@ class FieldsWorker(QThread):
             self.error.emit(str(e))
 
 
+class ICCProfilesWorker(QThread):
+    """Worker thread for loading ICC profiles."""
+
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, client: MubanAPIClient):
+        super().__init__()
+        self.client = client
+
+    def run(self):
+        try:
+            result = self.client.get_icc_profiles()
+            # Extract profiles from API response
+            if isinstance(result, dict):
+                if "data" in result:
+                    profiles = result["data"]
+                elif "content" in result:
+                    profiles = result["content"]
+                else:
+                    profiles = result
+            else:
+                profiles = result
+            self.finished.emit(profiles if isinstance(profiles, list) else [])
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 class GenerateTab(QWidget):
     """Tab for generating documents."""
 
@@ -137,6 +173,7 @@ class GenerateTab(QWidget):
         self._parameters: List[Dict[str, Any]] = []
         self._fields: List[Dict[str, Any]] = []
         self._fields_data: Optional[Dict[str, Any]] = None
+        self._icc_loaded = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -213,9 +250,10 @@ class GenerateTab(QWidget):
 
         top_layout.addWidget(params_group)
 
-        # Fields (informational) and Data
-        fields_group = QGroupBox("Fields (data collections)")
-        fields_layout = QVBoxLayout(fields_group)
+        # Fields (informational) and Data - hidden by default, shown only when template has fields
+        self.fields_group = QGroupBox("Fields (data collections)")
+        fields_layout = QVBoxLayout(self.fields_group)
+        self.fields_group.setVisible(False)  # Hidden until fields are loaded
 
         # Fields table (shows template field definitions)
         fields_label = QLabel("Template field definitions:")
@@ -245,7 +283,7 @@ class GenerateTab(QWidget):
         self.data_editor.setAcceptRichText(False)
         fields_layout.addWidget(self.data_editor)
 
-        top_layout.addWidget(fields_group)
+        top_layout.addWidget(self.fields_group)
 
         # Output options
         output_group = QGroupBox("Output Options")
@@ -268,6 +306,135 @@ class GenerateTab(QWidget):
         output_layout.addRow("Output:", output_file_layout)
 
         top_layout.addWidget(output_group)
+
+        # PDF Export Options (collapsible)
+        self.pdf_options_group = QGroupBox("PDF Export Options")
+        self.pdf_options_group.setCheckable(True)
+        self.pdf_options_group.setChecked(False)
+        pdf_layout = QFormLayout(self.pdf_options_group)
+
+        # PDF/A Conformance (only PDF/A-1b is supported by the service)
+        self.pdfa_combo = QComboBox()
+        self.pdfa_combo.addItems(["", "PDF/A-1b"])
+        self.pdfa_combo.setToolTip("PDF/A conformance level for archival. Note: PDF/A and encryption are mutually exclusive.")
+        pdf_layout.addRow("PDF/A Conformance:", self.pdfa_combo)
+
+        # ICC Profile (loaded from server)
+        self.icc_combo = QComboBox()
+        self.icc_combo.addItem("")  # Empty option
+        self.icc_combo.setToolTip("ICC color profile for CMYK color management in professional printing. Profiles loaded from server.")
+        pdf_layout.addRow("ICC Profile:", self.icc_combo)
+
+        # Passwords
+        self.pdf_user_password = QLineEdit()
+        self.pdf_user_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pdf_user_password.setPlaceholderText("Password to open document")
+        pdf_layout.addRow("User Password:", self.pdf_user_password)
+
+        self.pdf_owner_password = QLineEdit()
+        self.pdf_owner_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pdf_owner_password.setPlaceholderText("Password for permissions")
+        pdf_layout.addRow("Owner Password:", self.pdf_owner_password)
+
+        # Permissions
+        perms_layout = QHBoxLayout()
+        self.pdf_can_print = QCheckBox("Print")
+        self.pdf_can_print.setChecked(True)
+        self.pdf_can_print.setToolTip("Allow printing of the document")
+        perms_layout.addWidget(self.pdf_can_print)
+
+        self.pdf_can_copy = QCheckBox("Copy")
+        self.pdf_can_copy.setChecked(True)
+        self.pdf_can_copy.setToolTip("Allow copying text and graphics")
+        perms_layout.addWidget(self.pdf_can_copy)
+
+        self.pdf_can_modify = QCheckBox("Modify")
+        self.pdf_can_modify.setChecked(False)
+        self.pdf_can_modify.setToolTip("Allow modifying document content")
+        perms_layout.addWidget(self.pdf_can_modify)
+
+        self.pdf_can_annotate = QCheckBox("Annotate")
+        self.pdf_can_annotate.setChecked(True)
+        self.pdf_can_annotate.setToolTip("Allow adding annotations and comments")
+        perms_layout.addWidget(self.pdf_can_annotate)
+        perms_layout.addStretch()
+        pdf_layout.addRow("Permissions:", perms_layout)
+
+        # More permissions
+        perms2_layout = QHBoxLayout()
+        self.pdf_can_fill_forms = QCheckBox("Fill Forms")
+        self.pdf_can_fill_forms.setChecked(True)
+        self.pdf_can_fill_forms.setToolTip("Allow filling form fields")
+        perms2_layout.addWidget(self.pdf_can_fill_forms)
+
+        self.pdf_can_assemble = QCheckBox("Assemble")
+        self.pdf_can_assemble.setChecked(False)
+        self.pdf_can_assemble.setToolTip("Allow document assembly (insert/delete pages)")
+        perms2_layout.addWidget(self.pdf_can_assemble)
+
+        self.pdf_high_quality_print = QCheckBox("High Quality Print")
+        self.pdf_high_quality_print.setChecked(True)
+        self.pdf_high_quality_print.setToolTip("Allow high-resolution printing")
+        perms2_layout.addWidget(self.pdf_high_quality_print)
+        perms2_layout.addStretch()
+        pdf_layout.addRow("", perms2_layout)
+
+        # Encryption
+        self.pdf_encryption_combo = QComboBox()
+        self.pdf_encryption_combo.addItems(["128", "256"])
+        self.pdf_encryption_combo.setToolTip("Encryption key length: 128-bit (compatible) or 256-bit (more secure)")
+        pdf_layout.addRow("Encryption (bits):", self.pdf_encryption_combo)
+
+        top_layout.addWidget(self.pdf_options_group)
+
+        # HTML Export Options (collapsible)
+        self.html_options_group = QGroupBox("HTML Export Options")
+        self.html_options_group.setCheckable(True)
+        self.html_options_group.setChecked(False)
+        html_layout = QFormLayout(self.html_options_group)
+
+        # HTML options row 1
+        html_row1 = QHBoxLayout()
+        self.html_embed_fonts = QCheckBox("Embed Fonts")
+        self.html_embed_fonts.setChecked(True)
+        self.html_embed_fonts.setToolTip("Embed fonts in HTML. Disable for email to reduce size.")
+        html_row1.addWidget(self.html_embed_fonts)
+
+        self.html_embed_images = QCheckBox("Embed Images")
+        self.html_embed_images.setChecked(True)
+        self.html_embed_images.setToolTip("Embed images directly in HTML")
+        html_row1.addWidget(self.html_embed_images)
+
+        self.html_web_safe_fonts = QCheckBox("Web-Safe Fonts")
+        self.html_web_safe_fonts.setChecked(False)
+        self.html_web_safe_fonts.setToolTip("Use web-safe font fallbacks (Arial, Times, etc.)")
+        html_row1.addWidget(self.html_web_safe_fonts)
+        html_row1.addStretch()
+        html_layout.addRow("", html_row1)
+
+        # HTML options row 2
+        html_row2 = QHBoxLayout()
+        self.html_remove_empty_space = QCheckBox("Remove Empty Space")
+        self.html_remove_empty_space.setChecked(False)
+        self.html_remove_empty_space.setToolTip("Remove empty space between rows for compact output")
+        html_row2.addWidget(self.html_remove_empty_space)
+
+        self.html_wrap_break_word = QCheckBox("Wrap Text")
+        self.html_wrap_break_word.setChecked(False)
+        self.html_wrap_break_word.setToolTip("Wrap text at word boundaries")
+        html_row2.addWidget(self.html_wrap_break_word)
+
+        self.html_ignore_margins = QCheckBox("Ignore Page Margins")
+        self.html_ignore_margins.setChecked(False)
+        self.html_ignore_margins.setToolTip("Ignore page margins for responsive output")
+        html_row2.addWidget(self.html_ignore_margins)
+        html_row2.addStretch()
+        html_layout.addRow("", html_row2)
+
+        top_layout.addWidget(self.html_options_group)
+
+        # Update export options visibility based on format
+        self._update_export_options_visibility()
 
         # Generate button
         action_layout = QHBoxLayout()
@@ -297,10 +464,45 @@ class GenerateTab(QWidget):
         splitter.setSizes([500, 100])
         layout.addWidget(splitter)
 
+    def showEvent(self, event):
+        """Called when the tab is shown."""
+        super().showEvent(event)
+        # Load ICC profiles on first show
+        if not self._icc_loaded:
+            self._load_icc_profiles()
+
     def set_template(self, template_id: str):
         """Set the template ID (called from templates tab)."""
         self.template_id_input.setText(template_id)
         self._load_parameters()
+
+    def _load_icc_profiles(self):
+        """Load available ICC profiles from server."""
+        client = self._get_client()
+        if not client:
+            return
+
+        self.icc_worker = ICCProfilesWorker(client)
+        self.icc_worker.finished.connect(self._on_icc_loaded)
+        self.icc_worker.error.connect(self._on_icc_error)
+        self.icc_worker.start()
+
+    def _on_icc_loaded(self, profiles: list):
+        """Handle ICC profiles loaded."""
+        self._icc_loaded = True
+        # Clear existing items except the empty one
+        while self.icc_combo.count() > 1:
+            self.icc_combo.removeItem(1)
+        # Add profiles from server
+        for profile in profiles:
+            if isinstance(profile, str):
+                self.icc_combo.addItem(profile)
+            elif isinstance(profile, dict) and "name" in profile:
+                self.icc_combo.addItem(profile["name"])
+
+    def _on_icc_error(self, error: str):
+        """Handle ICC profiles loading error."""
+        self._log(f"⚠️ Could not load ICC profiles: {error}")
 
     def _get_client(self) -> Optional[MubanAPIClient]:
         """Get configured API client."""
@@ -407,6 +609,9 @@ class GenerateTab(QWidget):
             desc_item.setFlags(desc_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.fields_table.setItem(i, 2, desc_item)
 
+        # Show fields section only if there are fields defined
+        self.fields_group.setVisible(len(fields) > 0)
+        
         if fields:
             self._log(f"✓ Loaded {len(fields)} fields")
 
@@ -490,11 +695,18 @@ class GenerateTab(QWidget):
             QMessageBox.warning(self, "Error", f"Failed to load request: {e}")
 
     def _on_format_changed(self, format: str):
-        """Update output path extension when format changes."""
+        """Update output path extension and export options visibility when format changes."""
         current = self.output_input.text()
         if current:
             path = Path(current)
             self.output_input.setText(str(path.with_suffix(f".{format}")))
+        self._update_export_options_visibility()
+
+    def _update_export_options_visibility(self):
+        """Show/hide export options based on selected format."""
+        format = self.format_combo.currentText()
+        self.pdf_options_group.setVisible(format == "pdf")
+        self.html_options_group.setVisible(format == "html")
 
     def _browse_output(self):
         """Browse for output file."""
@@ -539,6 +751,61 @@ class GenerateTab(QWidget):
         except json.JSONDecodeError:
             return self._fields_data  # Fall back to stored data if JSON is invalid
 
+    def _get_pdf_options(self) -> Optional[Dict[str, Any]]:
+        """Get PDF export options if enabled."""
+        if not self.pdf_options_group.isChecked():
+            return None
+
+        options: Dict[str, Any] = {}
+
+        # PDF/A Conformance
+        pdfa = self.pdfa_combo.currentText()
+        if pdfa:
+            options["pdfaConformance"] = pdfa
+
+        # ICC Profile
+        icc = self.icc_combo.currentText()
+        if icc:
+            options["iccProfile"] = icc
+
+        # Passwords
+        user_pwd = self.pdf_user_password.text()
+        if user_pwd:
+            options["userPassword"] = user_pwd
+
+        owner_pwd = self.pdf_owner_password.text()
+        if owner_pwd:
+            options["ownerPassword"] = owner_pwd
+
+        # Permissions (only include if password is set, otherwise defaults apply)
+        if user_pwd or owner_pwd:
+            options["canPrint"] = self.pdf_can_print.isChecked()
+            options["canPrintHighQuality"] = self.pdf_high_quality_print.isChecked()
+            options["canModify"] = self.pdf_can_modify.isChecked()
+            options["canCopy"] = self.pdf_can_copy.isChecked()
+            options["canFillForms"] = self.pdf_can_fill_forms.isChecked()
+            options["canAnnotate"] = self.pdf_can_annotate.isChecked()
+            options["canAssemble"] = self.pdf_can_assemble.isChecked()
+            options["encryptionKeyLength"] = int(self.pdf_encryption_combo.currentText())
+
+        return options if options else None
+
+    def _get_html_options(self) -> Optional[Dict[str, Any]]:
+        """Get HTML export options if enabled."""
+        if not self.html_options_group.isChecked():
+            return None
+
+        options: Dict[str, Any] = {
+            "embedFonts": self.html_embed_fonts.isChecked(),
+            "embedImages": self.html_embed_images.isChecked(),
+            "useWebSafeFonts": self.html_web_safe_fonts.isChecked(),
+            "removeEmptySpace": self.html_remove_empty_space.isChecked(),
+            "wrapBreakWord": self.html_wrap_break_word.isChecked(),
+            "ignorePageMargins": self.html_ignore_margins.isChecked(),
+        }
+
+        return options
+
     def _generate(self):
         """Generate the document."""
         template_id = self.template_id_input.text().strip()
@@ -570,13 +837,20 @@ class GenerateTab(QWidget):
         self.progress.setRange(0, 0)
         self._log(f"Generating {self.format_combo.currentText().upper()}...")
 
+        # Get export options based on format
+        format = self.format_combo.currentText()
+        pdf_options = self._get_pdf_options() if format == "pdf" else None
+        html_options = self._get_html_options() if format == "html" else None
+
         self.generate_worker = GenerateWorker(
             client,
             template_id,
             output_path,
-            self.format_combo.currentText(),
+            format,
             self._get_parameters(),
             data,
+            pdf_options,
+            html_options,
         )
         self.generate_worker.finished.connect(self._on_generate_finished)
         self.generate_worker.error.connect(self._on_generate_error)
@@ -614,6 +888,8 @@ class GenerateTab(QWidget):
         self.format_combo.setEnabled(enabled)
         self.output_input.setEnabled(enabled)
         self.output_browse_btn.setEnabled(enabled)
+        self.pdf_options_group.setEnabled(enabled)
+        self.html_options_group.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
 
     def _log(self, message: str):
