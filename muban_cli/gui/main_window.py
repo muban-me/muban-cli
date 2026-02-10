@@ -17,6 +17,7 @@ from muban_cli.gui.tabs.package_tab import PackageTab
 from muban_cli.gui.tabs.templates_tab import TemplatesTab
 from muban_cli.gui.tabs.generate_tab import GenerateTab
 from muban_cli.gui.tabs.settings_tab import SettingsTab
+from muban_cli.gui.tabs.server_info_tab import ServerInfoTab
 
 
 class MubanMainWindow(QMainWindow):
@@ -62,12 +63,14 @@ class MubanMainWindow(QMainWindow):
         self.package_tab = PackageTab()
         self.templates_tab = TemplatesTab()
         self.generate_tab = GenerateTab()
+        self.server_info_tab = ServerInfoTab()
         self.settings_tab = SettingsTab()
 
         # Add tabs
         self.tabs.addTab(self.package_tab, "📦 Package")
         self.tabs.addTab(self.templates_tab, "📄 Templates")
         self.tabs.addTab(self.generate_tab, "⚙️ Generate")
+        self.tabs.addTab(self.server_info_tab, "🖥️ Server Info")
         self.tabs.addTab(self.settings_tab, "⚙️ Settings")
 
         self.setCentralWidget(self.tabs)
