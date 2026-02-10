@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QSplitter,
     QCheckBox,
+    QSizePolicy,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -267,12 +268,14 @@ class GenerateTab(QWidget):
         self.fields_table.setColumnWidth(0, 200)
         self.fields_table.setColumnWidth(1, 80)
         self.fields_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.fields_table.setMaximumHeight(120)
+        # Fixed height for fields table (shows ~3-4 rows of field definitions)
+        self.fields_table.setFixedHeight(120)
         fields_layout.addWidget(self.fields_table)
 
-        # Data editor (for field data)
-        data_label = QLabel("Data (JSON for collections - loaded from request):")
-        fields_layout.addWidget(data_label)
+        # Data editor (for field data) - hidden by default, shown when data is loaded
+        self.data_label = QLabel("Data (JSON for collections - loaded from request):")
+        self.data_label.setVisible(False)
+        fields_layout.addWidget(self.data_label)
         
         self.data_editor = QTextEdit()
         self.data_editor.setPlaceholderText(
@@ -280,7 +283,12 @@ class GenerateTab(QWidget):
             'Format: {"field_name": [{"col1": "val1", ...}, ...]}'
         )
         self.data_editor.setAcceptRichText(False)
+        self.data_editor.setVisible(False)
+        self.data_editor.setMinimumHeight(100)
         fields_layout.addWidget(self.data_editor)
+        
+        # Set size policy so the group shrinks when data editor is hidden
+        self.fields_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         top_layout.addWidget(self.fields_group)
 
@@ -529,6 +537,9 @@ class GenerateTab(QWidget):
         # Clear previous data
         self._fields_data = None
         self.data_editor.clear()
+        self.data_editor.setVisible(False)
+        self.data_label.setVisible(False)
+        self.fields_group.updateGeometry()
 
         self._set_ui_enabled(False)
         self.progress.setVisible(True)
@@ -686,9 +697,15 @@ class GenerateTab(QWidget):
             self._fields_data = data
             if data:
                 self.data_editor.setPlainText(json.dumps(data, indent=2))
+                self.data_editor.setVisible(True)
+                self.data_label.setVisible(True)
+                self.fields_group.updateGeometry()
                 self._log(f"✓ Loaded request with parameters and data from {Path(file_path).name}")
             else:
                 self.data_editor.clear()
+                self.data_editor.setVisible(False)
+                self.data_label.setVisible(False)
+                self.fields_group.updateGeometry()
                 self._log(f"✓ Loaded parameters from {Path(file_path).name}")
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load request: {e}")

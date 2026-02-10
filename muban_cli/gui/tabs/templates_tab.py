@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QAbstractItemView,
-    QComboBox,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -119,6 +118,15 @@ class UploadWorker(QThread):
 
 class TemplatesTab(QWidget):
     """Tab for managing templates."""
+    
+    # Map column index to API sort field
+    SORT_COLUMNS = {
+        1: "name",
+        2: "author",
+        3: "created",
+    }
+    # Column headers without sort indicator
+    BASE_HEADERS = ["ID", "Name", "Author", "Created"]
 
     def __init__(self):
         super().__init__()
@@ -128,6 +136,8 @@ class TemplatesTab(QWidget):
         self._current_page = 1
         self._total_pages = 1
         self._total_items = 0
+        self._sort_by = "created"
+        self._sort_dir = "desc"
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
@@ -150,7 +160,7 @@ class TemplatesTab(QWidget):
         status_layout.addWidget(self.refresh_btn)
         layout.addLayout(status_layout)
 
-        # Search and Sort
+        # Search
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search templates...")
@@ -159,30 +169,17 @@ class TemplatesTab(QWidget):
         self.search_btn = QPushButton("Search")
         self.search_btn.clicked.connect(self._search_templates)
         search_layout.addWidget(self.search_btn)
-        
-        # Sort controls
-        search_layout.addWidget(QLabel("Sort by:"))
-        self.sort_by_combo = QComboBox()
-        self.sort_by_combo.addItems(["created", "name", "author", "fileSize"])
-        self.sort_by_combo.setCurrentText("created")
-        self.sort_by_combo.currentTextChanged.connect(self._on_sort_changed)
-        search_layout.addWidget(self.sort_by_combo)
-        
-        self.sort_dir_combo = QComboBox()
-        self.sort_dir_combo.addItems(["desc", "asc"])
-        self.sort_dir_combo.setCurrentText("desc")
-        self.sort_dir_combo.currentTextChanged.connect(self._on_sort_changed)
-        search_layout.addWidget(self.sort_dir_combo)
-        
         layout.addLayout(search_layout)
 
         # Templates table
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["ID", "Name", "Author", "Created"])
+        self._update_header_labels()
         header = self.table.horizontalHeader()
         if header:
             header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
             header.setStretchLastSection(True)
+            header.setSectionsClickable(True)
+            header.sectionClicked.connect(self._on_header_clicked)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -257,9 +254,34 @@ class TemplatesTab(QWidget):
         """Search templates (resets to page 1)."""
         self._load_templates(reset_page=True)
 
-    def _on_sort_changed(self, _):
-        """Handle sort change."""
+    def _on_header_clicked(self, column: int):
+        """Handle column header click for sorting."""
+        if column not in self.SORT_COLUMNS:
+            return  # Column not sortable (e.g., ID)
+        
+        sort_field = self.SORT_COLUMNS[column]
+        
+        if self._sort_by == sort_field:
+            # Same column - toggle direction
+            self._sort_dir = "asc" if self._sort_dir == "desc" else "desc"
+        else:
+            # New column - default to desc for created, asc for others
+            self._sort_by = sort_field
+            self._sort_dir = "desc" if sort_field == "created" else "asc"
+        
+        self._update_header_labels()
         self._load_templates(reset_page=True)
+
+    def _update_header_labels(self):
+        """Update column headers with sort indicators."""
+        headers = []
+        for i, base in enumerate(self.BASE_HEADERS):
+            if i in self.SORT_COLUMNS and self.SORT_COLUMNS[i] == self._sort_by:
+                indicator = " ▲" if self._sort_dir == "asc" else " ▼"
+                headers.append(base + indicator)
+            else:
+                headers.append(base)
+        self.table.setHorizontalHeaderLabels(headers)
 
     def _load_templates(self, reset_page: bool = False):
         """Load templates from server."""
@@ -276,10 +298,8 @@ class TemplatesTab(QWidget):
             self.progress.setRange(0, 0)
 
             search = self.search_input.text().strip() or None
-            sort_by = self.sort_by_combo.currentText()
-            sort_dir = self.sort_dir_combo.currentText()
             
-            self.worker = TemplateWorker(client, search, self._current_page, sort_by, sort_dir)
+            self.worker = TemplateWorker(client, search, self._current_page, self._sort_by, self._sort_dir)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
@@ -473,8 +493,6 @@ class TemplatesTab(QWidget):
         self.refresh_btn.setEnabled(enabled)
         self.search_input.setEnabled(enabled)
         self.search_btn.setEnabled(enabled)
-        self.sort_by_combo.setEnabled(enabled)
-        self.sort_dir_combo.setEnabled(enabled)
         self.table.setEnabled(enabled)
         self.upload_btn.setEnabled(enabled)
         self.download_btn.setEnabled(enabled)
