@@ -53,6 +53,10 @@ def register_template_commands(cli: click.Group) -> None:
     @click.option('--page', '-p', type=int, default=1, help='Page number')
     @click.option('--size', '-n', type=int, default=20, help='Items per page')
     @click.option('--search', '-s', help='Search term')
+    @click.option('--sort-by', type=click.Choice(['name', 'author', 'created', 'fileSize']), 
+                  default='created', help='Sort field (default: created)')
+    @click.option('--sort-dir', type=click.Choice(['asc', 'desc']), 
+                  default='desc', help='Sort direction (default: desc)')
     @pass_context
     @require_config
     def list_templates(
@@ -63,7 +67,9 @@ def register_template_commands(cli: click.Group) -> None:
         truncate_length: int,
         page: int,
         size: int,
-        search: Optional[str]
+        search: Optional[str],
+        sort_by: str,
+        sort_dir: str
     ):
         """
         List available templates.
@@ -73,13 +79,17 @@ def register_template_commands(cli: click.Group) -> None:
           muban list
           muban list --search "invoice" --format json
           muban list --page 2 --size 50
+          muban list --sort-by name --sort-dir asc
         """
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)
         
         try:
             with MubanAPIClient(ctx.config_manager.get()) as client:
-                result = client.list_templates(page=page, size=size, search=search)
+                result = client.list_templates(
+                    page=page, size=size, search=search,
+                    sort_by=sort_by, sort_dir=sort_dir
+                )
                 
                 data = result.get('data', {})
                 templates = data.get('items', [])

@@ -160,6 +160,10 @@ def register_user_commands(cli: click.Group) -> None:
     @click.option('--search', '-s', help='Search by username or email')
     @click.option('--role', '-r', type=click.Choice(['ROLE_USER', 'ROLE_ADMIN', 'ROLE_MANAGER']), help='Filter by role')
     @click.option('--enabled/--disabled', default=None, help='Filter by enabled status')
+    @click.option('--sort-by', type=click.Choice(['username', 'email', 'firstName', 'lastName', 'created', 'lastLogin']),
+                  default='username', help='Sort field (default: username)')
+    @click.option('--sort-dir', type=click.Choice(['asc', 'desc']),
+                  default='asc', help='Sort direction (default: asc)')
     @pass_context
     @require_config
     def user_list(
@@ -172,7 +176,9 @@ def register_user_commands(cli: click.Group) -> None:
         size: int,
         search: Optional[str],
         role: Optional[str],
-        enabled: Optional[bool]
+        enabled: Optional[bool],
+        sort_by: str,
+        sort_dir: str
     ):
         """List all users (admin only)."""
         setup_logging(verbose, quiet)
@@ -185,7 +191,9 @@ def register_user_commands(cli: click.Group) -> None:
                     size=size,
                     search=search,
                     role=role,
-                    enabled=enabled
+                    enabled=enabled,
+                    sort_by=sort_by,
+                    sort_dir=sort_dir
                 )
                 
                 if fmt == OutputFormat.JSON:

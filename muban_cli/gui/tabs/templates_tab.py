@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QAbstractItemView,
+    QComboBox,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -34,15 +35,29 @@ class TemplateWorker(QThread):
     finished = pyqtSignal(dict)  # Emits {'templates': [...], 'page': int, 'total_pages': int, 'total_items': int}
     error = pyqtSignal(str)
 
-    def __init__(self, client: MubanAPIClient, search: Optional[str] = None, page: int = 1):
+    def __init__(
+        self,
+        client: MubanAPIClient,
+        search: Optional[str] = None,
+        page: int = 1,
+        sort_by: str = "created",
+        sort_dir: str = "desc"
+    ):
         super().__init__()
         self.client = client
         self.search = search
         self.page = page
+        self.sort_by = sort_by
+        self.sort_dir = sort_dir
 
     def run(self):
         try:
-            result = self.client.list_templates(search=self.search, page=self.page)
+            result = self.client.list_templates(
+                search=self.search,
+                page=self.page,
+                sort_by=self.sort_by,
+                sort_dir=self.sort_dir
+            )
             
             # Handle different response structures
             # New format: {'meta': ..., 'data': {'items': [...], 'totalPages': ..., 'totalItems': ...}, 'errors': []}
@@ -135,7 +150,7 @@ class TemplatesTab(QWidget):
         status_layout.addWidget(self.refresh_btn)
         layout.addLayout(status_layout)
 
-        # Search
+        # Search and Sort
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search templates...")
@@ -144,6 +159,21 @@ class TemplatesTab(QWidget):
         self.search_btn = QPushButton("Search")
         self.search_btn.clicked.connect(self._search_templates)
         search_layout.addWidget(self.search_btn)
+        
+        # Sort controls
+        search_layout.addWidget(QLabel("Sort by:"))
+        self.sort_by_combo = QComboBox()
+        self.sort_by_combo.addItems(["created", "name", "author", "fileSize"])
+        self.sort_by_combo.setCurrentText("created")
+        self.sort_by_combo.currentTextChanged.connect(self._on_sort_changed)
+        search_layout.addWidget(self.sort_by_combo)
+        
+        self.sort_dir_combo = QComboBox()
+        self.sort_dir_combo.addItems(["desc", "asc"])
+        self.sort_dir_combo.setCurrentText("desc")
+        self.sort_dir_combo.currentTextChanged.connect(self._on_sort_changed)
+        search_layout.addWidget(self.sort_dir_combo)
+        
         layout.addLayout(search_layout)
 
         # Templates table
@@ -227,6 +257,10 @@ class TemplatesTab(QWidget):
         """Search templates (resets to page 1)."""
         self._load_templates(reset_page=True)
 
+    def _on_sort_changed(self, _):
+        """Handle sort change."""
+        self._load_templates(reset_page=True)
+
     def _load_templates(self, reset_page: bool = False):
         """Load templates from server."""
         try:
@@ -242,7 +276,10 @@ class TemplatesTab(QWidget):
             self.progress.setRange(0, 0)
 
             search = self.search_input.text().strip() or None
-            self.worker = TemplateWorker(client, search, self._current_page)
+            sort_by = self.sort_by_combo.currentText()
+            sort_dir = self.sort_dir_combo.currentText()
+            
+            self.worker = TemplateWorker(client, search, self._current_page, sort_by, sort_dir)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
@@ -436,6 +473,8 @@ class TemplatesTab(QWidget):
         self.refresh_btn.setEnabled(enabled)
         self.search_input.setEnabled(enabled)
         self.search_btn.setEnabled(enabled)
+        self.sort_by_combo.setEnabled(enabled)
+        self.sort_dir_combo.setEnabled(enabled)
         self.table.setEnabled(enabled)
         self.upload_btn.setEnabled(enabled)
         self.download_btn.setEnabled(enabled)

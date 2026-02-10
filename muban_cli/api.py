@@ -371,7 +371,9 @@ class MubanAPIClient:
         self,
         page: int = 1,
         size: int = 20,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         List templates with pagination.
@@ -380,15 +382,21 @@ class MubanAPIClient:
             page: Page number (1-indexed)
             size: Items per page
             search: Search term
+            sort_by: Sort field (name, author, created, fileSize)
+            sort_dir: Sort direction (asc, desc)
         
         Returns:
             Paginated list of templates
         """
-        return self._request(
-            "GET",
-            "templates",
-            params={"page": page, "size": size, "search": search}
-        )
+        params: Dict[str, Any] = {"page": page, "size": size}
+        if search:
+            params["search"] = search
+        if sort_by:
+            params["sortBy"] = sort_by
+        if sort_dir:
+            params["sortDir"] = sort_dir
+        
+        return self._request("GET", "templates", params=params)
     
     def get_template(self, template_id: str) -> Dict[str, Any]:
         """
@@ -927,7 +935,9 @@ class MubanAPIClient:
         size: int = 20,
         search: Optional[str] = None,
         role: Optional[str] = None,
-        enabled: Optional[bool] = None
+        enabled: Optional[bool] = None,
+        sort_by: Optional[str] = None,
+        sort_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         List users (admin only).
@@ -938,6 +948,8 @@ class MubanAPIClient:
             search: Search query (username, email, name)
             role: Filter by role (ROLE_USER, ROLE_ADMIN, ROLE_MANAGER)
             enabled: Filter by enabled status
+            sort_by: Sort field (username, email, firstName, lastName, created, lastLogin)
+            sort_dir: Sort direction (asc, desc)
         """
         params: Dict[str, Any] = {"page": page, "size": size}
         if search:
@@ -946,6 +958,10 @@ class MubanAPIClient:
             params["role"] = role
         if enabled is not None:
             params["enabled"] = enabled
+        if sort_by:
+            params["sortBy"] = sort_by
+        if sort_dir:
+            params["sortDir"] = sort_dir
         
         return self._request("GET", "users", params=params)
     
