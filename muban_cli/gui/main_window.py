@@ -24,8 +24,8 @@ class MubanMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{__prog_name__} - Document Generation Tool")
-        self.setMinimumSize(900, 650)
-        self.resize(1000, 700)
+        self.setMinimumSize(1000, 750)
+        self.resize(1100, 800)
 
         self._setup_menu()
         self._setup_tabs()

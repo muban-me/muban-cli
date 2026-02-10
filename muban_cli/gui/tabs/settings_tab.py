@@ -176,13 +176,20 @@ class SettingsTab(QWidget):
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
-        # Save button
-        save_layout = QHBoxLayout()
-        save_layout.addStretch()
+        # Action buttons
+        action_layout = QHBoxLayout()
+        
+        self.clear_btn = QPushButton("🗑️ Clear Configuration")
+        self.clear_btn.clicked.connect(self._clear_config)
+        action_layout.addWidget(self.clear_btn)
+        
+        action_layout.addStretch()
+        
         self.save_btn = QPushButton("💾 Save Configuration")
         self.save_btn.clicked.connect(self._save_config)
-        save_layout.addWidget(self.save_btn)
-        layout.addLayout(save_layout)
+        action_layout.addWidget(self.save_btn)
+        
+        layout.addLayout(action_layout)
 
         layout.addStretch()
 
@@ -246,6 +253,40 @@ class SettingsTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save configuration: {e}")
 
+    def _clear_config(self):
+        """Clear all configuration."""
+        reply = QMessageBox.question(
+            self,
+            "Clear Configuration",
+            "Are you sure you want to clear all configuration?\n\n"
+            "This will remove server URL, authentication tokens, and all settings.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+            
+        try:
+            get_config_manager().clear()
+            
+            # Clear all input fields
+            self.server_url_input.clear()
+            self.auth_server_input.clear()
+            self.verify_ssl_cb.setChecked(True)
+            self.timeout_spin.setValue(30)
+            self.username_input.clear()
+            self.password_input.clear()
+            self.client_id_input.clear()
+            self.client_secret_input.clear()
+            
+            # Update auth status
+            self._update_auth_status(MubanConfig())
+            
+            QMessageBox.information(self, "Cleared", "Configuration cleared successfully.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to clear configuration: {e}")
+
     def _get_auth_client(self) -> MubanAuthClient:
         """Get auth client with current config."""
         config = get_config_manager().load()
@@ -281,11 +322,30 @@ class SettingsTab(QWidget):
         self.progress.setVisible(False)
         self.password_input.clear()
 
-        # Save the updated config with tokens
+        # Save the tokens from the login result
+        self._save_token_result(result)
+        
+        # Also save form settings
         self._save_config()
         self._update_auth_status()
 
         QMessageBox.information(self, "Login Successful", "You are now logged in.")
+
+    def _save_token_result(self, result: dict):
+        """Save token result to config."""
+        config = get_config_manager().load()
+        
+        if "access_token" in result:
+            config.token = result["access_token"]
+        if "refresh_token" in result:
+            config.refresh_token = result["refresh_token"]
+        if "expires_in" in result:
+            import time
+            config.token_expires_at = int(time.time()) + result["expires_in"]
+        elif "expires_at" in result:
+            config.token_expires_at = result["expires_at"]
+            
+        get_config_manager().save(config)
 
     def _on_login_error(self, error: str):
         """Handle login error."""
