@@ -31,32 +31,48 @@ from muban_cli.config import get_config_manager
 class TemplateWorker(QThread):
     """Worker thread for template operations."""
 
-    finished = pyqtSignal(list)
+    finished = pyqtSignal(dict)  # Emits {'templates': [...], 'page': int, 'total_pages': int, 'total_items': int}
     error = pyqtSignal(str)
 
-    def __init__(self, client: MubanAPIClient, search: Optional[str] = None):
+    def __init__(self, client: MubanAPIClient, search: Optional[str] = None, page: int = 1):
         super().__init__()
         self.client = client
         self.search = search
+        self.page = page
 
     def run(self):
         try:
-            result = self.client.list_templates(search=self.search)
+            result = self.client.list_templates(search=self.search, page=self.page)
             
             # Handle different response structures
-            # New format: {'meta': ..., 'data': {'items': [...]}, 'errors': []}
-            # Old format: {'content': [...]}
+            # New format: {'meta': ..., 'data': {'items': [...], 'totalPages': ..., 'totalItems': ...}, 'errors': []}
+            templates = []
+            total_pages = 1
+            total_items = 0
+            current_page = self.page
+            
             if isinstance(result, dict):
                 if "data" in result and isinstance(result["data"], dict):
-                    templates = result["data"].get("items", [])
+                    data = result["data"]
+                    templates = data.get("items", [])
+                    total_pages = data.get("totalPages", 1)
+                    total_items = data.get("totalItems", len(templates))
+                    current_page = data.get("currentPage", self.page)
                 elif "content" in result:
                     templates = result["content"]
+                    total_pages = result.get("totalPages", 1)
+                    total_items = result.get("totalElements", len(templates))
                 else:
-                    templates = result
+                    templates = result if isinstance(result, list) else []
             else:
-                templates = result
+                templates = result if isinstance(result, list) else []
                 
-            self.finished.emit(templates if isinstance(templates, list) else [])
+            self.finished.emit({
+                'templates': templates,
+                'page': current_page,
+                'total_pages': total_pages,
+                'total_items': total_items
+            })
         except Exception as e:
             self.error.emit(str(e))
 
@@ -94,6 +110,9 @@ class TemplatesTab(QWidget):
         self._templates: List[Dict[str, Any]] = []
         self._initial_load_done = False
         self.worker: Optional[TemplateWorker] = None
+        self._current_page = 1
+        self._total_pages = 1
+        self._total_items = 0
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
@@ -120,10 +139,10 @@ class TemplatesTab(QWidget):
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search templates...")
-        self.search_input.returnPressed.connect(self._load_templates)
+        self.search_input.returnPressed.connect(self._search_templates)
         search_layout.addWidget(self.search_input)
         self.search_btn = QPushButton("Search")
-        self.search_btn.clicked.connect(self._load_templates)
+        self.search_btn.clicked.connect(self._search_templates)
         search_layout.addWidget(self.search_btn)
         layout.addLayout(search_layout)
 
@@ -146,6 +165,24 @@ class TemplatesTab(QWidget):
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
+
+        # Pagination
+        pagination_layout = QHBoxLayout()
+        self.prev_btn = QPushButton("◀ Previous")
+        self.prev_btn.clicked.connect(self._prev_page)
+        self.prev_btn.setEnabled(False)
+        pagination_layout.addWidget(self.prev_btn)
+        
+        pagination_layout.addStretch()
+        self.page_label = QLabel("Page 1 of 1")
+        pagination_layout.addWidget(self.page_label)
+        pagination_layout.addStretch()
+        
+        self.next_btn = QPushButton("Next ▶")
+        self.next_btn.clicked.connect(self._next_page)
+        self.next_btn.setEnabled(False)
+        pagination_layout.addWidget(self.next_btn)
+        layout.addLayout(pagination_layout)
 
         # Actions
         actions_group = QGroupBox("Actions")
@@ -186,19 +223,26 @@ class TemplatesTab(QWidget):
             self.status_label.setText(f"⚠️ Error: {e}")
             return None
 
-    def _load_templates(self):
+    def _search_templates(self):
+        """Search templates (resets to page 1)."""
+        self._load_templates(reset_page=True)
+
+    def _load_templates(self, reset_page: bool = False):
         """Load templates from server."""
         try:
             client = self._get_client()
             if not client:
                 return
 
+            if reset_page:
+                self._current_page = 1
+
             self._set_ui_enabled(False)
             self.progress.setVisible(True)
             self.progress.setRange(0, 0)
 
             search = self.search_input.text().strip() or None
-            self.worker = TemplateWorker(client, search)
+            self.worker = TemplateWorker(client, search, self._current_page)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
@@ -207,10 +251,15 @@ class TemplatesTab(QWidget):
             self.progress.setVisible(False)
             QMessageBox.critical(self, "Error", f"Failed to load templates: {e}")
 
-    def _on_templates_loaded(self, templates: list):
+    def _on_templates_loaded(self, result: dict):
         """Handle loaded templates."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
+
+        templates = result.get('templates', [])
+        self._current_page = result.get('page', 1)
+        self._total_pages = result.get('total_pages', 1)
+        self._total_items = result.get('total_items', len(templates))
 
         self._templates = templates
         self.table.setRowCount(len(templates))
@@ -225,7 +274,27 @@ class TemplatesTab(QWidget):
                 created = created.replace("T", " ")[:19]
             self.table.setItem(i, 3, QTableWidgetItem(created))
 
-        self.status_label.setText(f"✓ Loaded {len(templates)} templates")
+        # Update pagination controls
+        self._update_pagination_ui()
+        self.status_label.setText(f"✓ Loaded {len(templates)} of {self._total_items} templates")
+
+    def _update_pagination_ui(self):
+        """Update pagination buttons and label."""
+        self.page_label.setText(f"Page {self._current_page} of {self._total_pages} ({self._total_items} total)")
+        self.prev_btn.setEnabled(self._current_page > 1)
+        self.next_btn.setEnabled(self._current_page < self._total_pages)
+
+    def _prev_page(self):
+        """Go to previous page."""
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._load_templates()
+
+    def _next_page(self):
+        """Go to next page."""
+        if self._current_page < self._total_pages:
+            self._current_page += 1
+            self._load_templates()
 
     def _on_load_error(self, error: str):
         """Handle load error."""
@@ -372,3 +441,8 @@ class TemplatesTab(QWidget):
         self.download_btn.setEnabled(enabled)
         self.delete_btn.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
+        if enabled:
+            self._update_pagination_ui()
+        else:
+            self.prev_btn.setEnabled(False)
+            self.next_btn.setEnabled(False)
