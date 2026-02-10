@@ -5,8 +5,8 @@ Templates Tab - List and manage templates on the server.
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtGui import QShowEvent
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer
+from PyQt6.QtGui import QShowEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -39,6 +39,7 @@ class TemplateWorker(QThread):
         client: MubanAPIClient,
         search: Optional[str] = None,
         page: int = 1,
+        size: int = 20,
         sort_by: str = "created",
         sort_dir: str = "desc"
     ):
@@ -46,6 +47,7 @@ class TemplateWorker(QThread):
         self.client = client
         self.search = search
         self.page = page
+        self.size = size
         self.sort_by = sort_by
         self.sort_dir = sort_dir
 
@@ -54,6 +56,7 @@ class TemplateWorker(QThread):
             result = self.client.list_templates(
                 search=self.search,
                 page=self.page,
+                size=self.size,
                 sort_by=self.sort_by,
                 sort_dir=self.sort_dir
             )
@@ -128,6 +131,11 @@ class TemplatesTab(QWidget):
     # Column headers without sort indicator
     BASE_HEADERS = ["ID", "Name", "Author", "Created"]
 
+    # Row height for page size calculation (pixels)
+    ROW_HEIGHT = 26
+    MIN_PAGE_SIZE = 5
+    MAX_PAGE_SIZE = 100
+
     def __init__(self):
         super().__init__()
         self._templates: List[Dict[str, Any]] = []
@@ -138,6 +146,8 @@ class TemplatesTab(QWidget):
         self._total_items = 0
         self._sort_by = "created"
         self._sort_dir = "desc"
+        self._page_size = 20  # Will be recalculated on resize
+        self._resize_timer: Optional[QTimer] = None
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
@@ -145,7 +155,45 @@ class TemplatesTab(QWidget):
         super().showEvent(event)
         if not self._initial_load_done:
             self._initial_load_done = True
+            # Calculate initial page size after layout is ready
+            QTimer.singleShot(0, self._initial_load)
+
+    def _initial_load(self):
+        """Perform initial load with calculated page size."""
+        self._page_size = self._calculate_page_size()
+        self._load_templates()
+
+    def resizeEvent(self, event: QResizeEvent):
+        """Recalculate page size on resize."""
+        super().resizeEvent(event)
+        if not self._initial_load_done:
+            return
+        
+        # Debounce resize events to avoid excessive reloads
+        if self._resize_timer is None:
+            self._resize_timer = QTimer()
+            self._resize_timer.setSingleShot(True)
+            self._resize_timer.timeout.connect(self._on_resize_finished)
+        self._resize_timer.start(300)  # 300ms debounce
+
+    def _on_resize_finished(self):
+        """Handle resize completion - recalculate page size and reload if changed."""
+        new_size = self._calculate_page_size()
+        # Only reload if size changed by more than 2 to avoid jitter
+        if abs(new_size - self._page_size) > 2:
+            self._page_size = new_size
+            self._current_page = 1  # Reset to first page
             self._load_templates()
+
+    def _calculate_page_size(self) -> int:
+        """Calculate optimal page size based on table viewport height."""
+        viewport = self.table.viewport()
+        if viewport is None:
+            return 20
+        viewport_height = viewport.height()
+        # Subtract 2 rows for header and potential scrollbar/padding
+        calculated = (viewport_height // self.ROW_HEIGHT) - 2
+        return max(self.MIN_PAGE_SIZE, min(self.MAX_PAGE_SIZE, calculated))
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -299,7 +347,7 @@ class TemplatesTab(QWidget):
 
             search = self.search_input.text().strip() or None
             
-            self.worker = TemplateWorker(client, search, self._current_page, self._sort_by, self._sort_dir)
+            self.worker = TemplateWorker(client, search, self._current_page, self._page_size, self._sort_by, self._sort_dir)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
