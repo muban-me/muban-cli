@@ -5,7 +5,7 @@ Templates Tab - List and manage templates on the server.
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
 from PyQt6.QtGui import QShowEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QWidget,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QAbstractItemView,
+    QSpinBox,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -181,8 +182,13 @@ class TemplatesTab(QWidget):
         new_size = self._calculate_page_size()
         # Only reload if size changed by more than 2 to avoid jitter
         if abs(new_size - self._page_size) > 2:
+            old_size = self._page_size
             self._page_size = new_size
-            self._current_page = 1  # Reset to first page
+            # Try to stay at approximately the same position in the data
+            # Calculate which item was first on the old page, then find corresponding new page
+            first_item = (self._current_page - 1) * old_size + 1
+            new_page = max(1, (first_item - 1) // new_size + 1)
+            self._current_page = new_page
             self._load_templates()
 
     def _calculate_page_size(self) -> int:
@@ -249,8 +255,24 @@ class TemplatesTab(QWidget):
         pagination_layout.addWidget(self.prev_btn)
         
         pagination_layout.addStretch()
-        self.page_label = QLabel("Page 1 of 1")
-        pagination_layout.addWidget(self.page_label)
+        
+        # Page number input
+        page_label = QLabel("Page")
+        pagination_layout.addWidget(page_label)
+        
+        self.page_spinbox = QSpinBox()
+        self.page_spinbox.setMinimum(1)
+        self.page_spinbox.setMaximum(1)
+        self.page_spinbox.setValue(1)
+        self.page_spinbox.setMinimumWidth(80)
+        self.page_spinbox.setToolTip("Enter page number")
+        self.page_spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_spinbox.valueChanged.connect(self._on_page_changed)
+        pagination_layout.addWidget(self.page_spinbox)
+        
+        self.total_pages_label = QLabel("of 1 (0 total)")
+        pagination_layout.addWidget(self.total_pages_label)
+        
         pagination_layout.addStretch()
         
         self.next_btn = QPushButton("Next ▶")
@@ -379,15 +401,32 @@ class TemplatesTab(QWidget):
                 created = created.replace("T", " ")[:19]
             self.table.setItem(i, 3, QTableWidgetItem(created))
 
+        # Update vertical header to show absolute row numbers
+        start_index = (self._current_page - 1) * self._page_size
+        vertical_labels = [str(start_index + i + 1) for i in range(len(templates))]
+        self.table.setVerticalHeaderLabels(vertical_labels)
+
         # Update pagination controls
         self._update_pagination_ui()
         self.status_label.setText(f"✓ Loaded {len(templates)} of {self._total_items} templates")
 
     def _update_pagination_ui(self):
-        """Update pagination buttons and label."""
-        self.page_label.setText(f"Page {self._current_page} of {self._total_pages} ({self._total_items} total)")
+        """Update pagination buttons and spinbox."""
+        # Block signals to avoid triggering page change while updating
+        self.page_spinbox.blockSignals(True)
+        self.page_spinbox.setMaximum(max(1, self._total_pages))
+        self.page_spinbox.setValue(self._current_page)
+        self.page_spinbox.blockSignals(False)
+        
+        self.total_pages_label.setText(f"of {self._total_pages} ({self._total_items} total)")
         self.prev_btn.setEnabled(self._current_page > 1)
         self.next_btn.setEnabled(self._current_page < self._total_pages)
+
+    def _on_page_changed(self, page: int):
+        """Handle page spinbox value change."""
+        if page != self._current_page and 1 <= page <= self._total_pages:
+            self._current_page = page
+            self._load_templates()
 
     def _prev_page(self):
         """Go to previous page."""
@@ -546,6 +585,7 @@ class TemplatesTab(QWidget):
         self.download_btn.setEnabled(enabled)
         self.delete_btn.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
+        self.page_spinbox.setEnabled(enabled)
         if enabled:
             self._update_pagination_ui()
         else:
