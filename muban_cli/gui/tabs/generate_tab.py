@@ -25,7 +25,6 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QTextEdit,
     QSplitter,
-    QCheckBox,
     QSizePolicy,
 )
 
@@ -174,6 +173,9 @@ class GenerateTab(QWidget):
         self._fields: List[Dict[str, Any]] = []
         self._fields_data: Optional[Dict[str, Any]] = None
         self._icc_loaded = False
+        self._icc_profiles: List[str] = []
+        self._pdf_options: Dict[str, Any] = {}
+        self._html_options: Dict[str, Any] = {}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -314,131 +316,17 @@ class GenerateTab(QWidget):
 
         top_layout.addWidget(output_group)
 
-        # PDF Export Options (collapsible)
-        self.pdf_options_group = QGroupBox("PDF Export Options")
-        self.pdf_options_group.setCheckable(True)
-        self.pdf_options_group.setChecked(False)
-        pdf_layout = QFormLayout(self.pdf_options_group)
-
-        # PDF/A Conformance (only PDF/A-1b is supported by the service)
-        self.pdfa_combo = QComboBox()
-        self.pdfa_combo.addItems(["", "PDF/A-1b"])
-        self.pdfa_combo.setToolTip("PDF/A conformance level for archival. Note: PDF/A and encryption are mutually exclusive.")
-        pdf_layout.addRow("PDF/A Conformance:", self.pdfa_combo)
-
-        # ICC Profile (loaded from server)
-        self.icc_combo = QComboBox()
-        self.icc_combo.addItem("")  # Empty option
-        self.icc_combo.setToolTip("ICC color profile for CMYK color management in professional printing. Profiles loaded from server.")
-        pdf_layout.addRow("ICC Profile:", self.icc_combo)
-
-        # Passwords
-        self.pdf_user_password = QLineEdit()
-        self.pdf_user_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pdf_user_password.setPlaceholderText("Password to open document")
-        pdf_layout.addRow("User Password:", self.pdf_user_password)
-
-        self.pdf_owner_password = QLineEdit()
-        self.pdf_owner_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pdf_owner_password.setPlaceholderText("Password for permissions")
-        pdf_layout.addRow("Owner Password:", self.pdf_owner_password)
-
-        # Permissions
-        perms_layout = QHBoxLayout()
-        self.pdf_can_print = QCheckBox("Print")
-        self.pdf_can_print.setChecked(True)
-        self.pdf_can_print.setToolTip("Allow printing of the document")
-        perms_layout.addWidget(self.pdf_can_print)
-
-        self.pdf_can_copy = QCheckBox("Copy")
-        self.pdf_can_copy.setChecked(True)
-        self.pdf_can_copy.setToolTip("Allow copying text and graphics")
-        perms_layout.addWidget(self.pdf_can_copy)
-
-        self.pdf_can_modify = QCheckBox("Modify")
-        self.pdf_can_modify.setChecked(False)
-        self.pdf_can_modify.setToolTip("Allow modifying document content")
-        perms_layout.addWidget(self.pdf_can_modify)
-
-        self.pdf_can_annotate = QCheckBox("Annotate")
-        self.pdf_can_annotate.setChecked(True)
-        self.pdf_can_annotate.setToolTip("Allow adding annotations and comments")
-        perms_layout.addWidget(self.pdf_can_annotate)
-        perms_layout.addStretch()
-        pdf_layout.addRow("Permissions:", perms_layout)
-
-        # More permissions
-        perms2_layout = QHBoxLayout()
-        self.pdf_can_fill_forms = QCheckBox("Fill Forms")
-        self.pdf_can_fill_forms.setChecked(True)
-        self.pdf_can_fill_forms.setToolTip("Allow filling form fields")
-        perms2_layout.addWidget(self.pdf_can_fill_forms)
-
-        self.pdf_can_assemble = QCheckBox("Assemble")
-        self.pdf_can_assemble.setChecked(False)
-        self.pdf_can_assemble.setToolTip("Allow document assembly (insert/delete pages)")
-        perms2_layout.addWidget(self.pdf_can_assemble)
-
-        self.pdf_high_quality_print = QCheckBox("High Quality Print")
-        self.pdf_high_quality_print.setChecked(True)
-        self.pdf_high_quality_print.setToolTip("Allow high-resolution printing")
-        perms2_layout.addWidget(self.pdf_high_quality_print)
-        perms2_layout.addStretch()
-        pdf_layout.addRow("", perms2_layout)
-
-        # Encryption
-        self.pdf_encryption_combo = QComboBox()
-        self.pdf_encryption_combo.addItems(["128", "256"])
-        self.pdf_encryption_combo.setToolTip("Encryption key length: 128-bit (compatible) or 256-bit (more secure)")
-        pdf_layout.addRow("Encryption (bits):", self.pdf_encryption_combo)
-
-        top_layout.addWidget(self.pdf_options_group)
-
-        # HTML Export Options (collapsible)
-        self.html_options_group = QGroupBox("HTML Export Options")
-        self.html_options_group.setCheckable(True)
-        self.html_options_group.setChecked(False)
-        html_layout = QFormLayout(self.html_options_group)
-
-        # HTML options row 1
-        html_row1 = QHBoxLayout()
-        self.html_embed_fonts = QCheckBox("Embed Fonts")
-        self.html_embed_fonts.setChecked(True)
-        self.html_embed_fonts.setToolTip("Embed fonts in HTML. Disable for email to reduce size.")
-        html_row1.addWidget(self.html_embed_fonts)
-
-        self.html_embed_images = QCheckBox("Embed Images")
-        self.html_embed_images.setChecked(True)
-        self.html_embed_images.setToolTip("Embed images directly in HTML")
-        html_row1.addWidget(self.html_embed_images)
-
-        self.html_web_safe_fonts = QCheckBox("Web-Safe Fonts")
-        self.html_web_safe_fonts.setChecked(False)
-        self.html_web_safe_fonts.setToolTip("Use web-safe font fallbacks (Arial, Times, etc.)")
-        html_row1.addWidget(self.html_web_safe_fonts)
-        html_row1.addStretch()
-        html_layout.addRow("", html_row1)
-
-        # HTML options row 2
-        html_row2 = QHBoxLayout()
-        self.html_remove_empty_space = QCheckBox("Remove Empty Space")
-        self.html_remove_empty_space.setChecked(False)
-        self.html_remove_empty_space.setToolTip("Remove empty space between rows for compact output")
-        html_row2.addWidget(self.html_remove_empty_space)
-
-        self.html_wrap_break_word = QCheckBox("Wrap Text")
-        self.html_wrap_break_word.setChecked(False)
-        self.html_wrap_break_word.setToolTip("Wrap text at word boundaries")
-        html_row2.addWidget(self.html_wrap_break_word)
-
-        self.html_ignore_margins = QCheckBox("Ignore Page Margins")
-        self.html_ignore_margins.setChecked(False)
-        self.html_ignore_margins.setToolTip("Ignore page margins for responsive output")
-        html_row2.addWidget(self.html_ignore_margins)
-        html_row2.addStretch()
-        html_layout.addRow("", html_row2)
-
-        top_layout.addWidget(self.html_options_group)
+        # Export options button
+        export_layout = QHBoxLayout()
+        self.export_options_btn = QPushButton("⚙️ Export Options...")
+        self.export_options_btn.setToolTip("Configure PDF/HTML export options")
+        self.export_options_btn.clicked.connect(self._open_export_options_dialog)
+        export_layout.addWidget(self.export_options_btn)
+        self.export_summary_label = QLabel("Default settings")
+        self.export_summary_label.setStyleSheet("color: gray; font-style: italic;")
+        export_layout.addWidget(self.export_summary_label)
+        export_layout.addStretch()
+        top_layout.addLayout(export_layout)
 
         # Update export options visibility based on format
         self._update_export_options_visibility()
@@ -497,15 +385,13 @@ class GenerateTab(QWidget):
     def _on_icc_loaded(self, profiles: list):
         """Handle ICC profiles loaded."""
         self._icc_loaded = True
-        # Clear existing items except the empty one
-        while self.icc_combo.count() > 1:
-            self.icc_combo.removeItem(1)
-        # Add profiles from server
+        # Store profiles for use in dialog
+        self._icc_profiles = []
         for profile in profiles:
             if isinstance(profile, str):
-                self.icc_combo.addItem(profile)
+                self._icc_profiles.append(profile)
             elif isinstance(profile, dict) and "name" in profile:
-                self.icc_combo.addItem(profile["name"])
+                self._icc_profiles.append(profile["name"])
 
     def _on_icc_error(self, error: str):
         """Handle ICC profiles loading error."""
@@ -721,8 +607,11 @@ class GenerateTab(QWidget):
     def _update_export_options_visibility(self):
         """Show/hide export options based on selected format."""
         format = self.format_combo.currentText()
-        self.pdf_options_group.setVisible(format == "pdf")
-        self.html_options_group.setVisible(format == "html")
+        # Only show export options button for formats that have options
+        show = format in ("pdf", "html")
+        self.export_options_btn.setVisible(show)
+        self.export_summary_label.setVisible(show)
+        self._update_export_summary()
 
     def _browse_output(self):
         """Browse for output file."""
@@ -768,59 +657,70 @@ class GenerateTab(QWidget):
             return self._fields_data  # Fall back to stored data if JSON is invalid
 
     def _get_pdf_options(self) -> Optional[Dict[str, Any]]:
-        """Get PDF export options if enabled."""
-        if not self.pdf_options_group.isChecked():
-            return None
-
-        options: Dict[str, Any] = {}
-
-        # PDF/A Conformance
-        pdfa = self.pdfa_combo.currentText()
-        if pdfa:
-            options["pdfaConformance"] = pdfa
-
-        # ICC Profile
-        icc = self.icc_combo.currentText()
-        if icc:
-            options["iccProfile"] = icc
-
-        # Passwords
-        user_pwd = self.pdf_user_password.text()
-        if user_pwd:
-            options["userPassword"] = user_pwd
-
-        owner_pwd = self.pdf_owner_password.text()
-        if owner_pwd:
-            options["ownerPassword"] = owner_pwd
-
-        # Permissions (only include if password is set, otherwise defaults apply)
-        if user_pwd or owner_pwd:
-            options["canPrint"] = self.pdf_can_print.isChecked()
-            options["canPrintHighQuality"] = self.pdf_high_quality_print.isChecked()
-            options["canModify"] = self.pdf_can_modify.isChecked()
-            options["canCopy"] = self.pdf_can_copy.isChecked()
-            options["canFillForms"] = self.pdf_can_fill_forms.isChecked()
-            options["canAnnotate"] = self.pdf_can_annotate.isChecked()
-            options["canAssemble"] = self.pdf_can_assemble.isChecked()
-            options["encryptionKeyLength"] = int(self.pdf_encryption_combo.currentText())
-
-        return options if options else None
+        """Get PDF export options."""
+        return self._pdf_options if self._pdf_options else None
 
     def _get_html_options(self) -> Optional[Dict[str, Any]]:
-        """Get HTML export options if enabled."""
-        if not self.html_options_group.isChecked():
-            return None
+        """Get HTML export options."""
+        return self._html_options if self._html_options else None
 
-        options: Dict[str, Any] = {
-            "embedFonts": self.html_embed_fonts.isChecked(),
-            "embedImages": self.html_embed_images.isChecked(),
-            "useWebSafeFonts": self.html_web_safe_fonts.isChecked(),
-            "removeEmptySpace": self.html_remove_empty_space.isChecked(),
-            "wrapBreakWord": self.html_wrap_break_word.isChecked(),
-            "ignorePageMargins": self.html_ignore_margins.isChecked(),
-        }
+    def _open_export_options_dialog(self):
+        """Open the export options dialog."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
 
-        return options
+        format = self.format_combo.currentText()
+        dialog = ExportOptionsDialog(
+            parent=self,
+            pdf_options=self._pdf_options,
+            html_options=self._html_options,
+            icc_profiles=self._icc_profiles,
+        )
+        # Switch to the appropriate tab
+        if format == "html":
+            dialog.tabs.setCurrentIndex(1)
+
+        if dialog.exec():
+            self._pdf_options = dialog.get_pdf_options() or {}
+            self._html_options = dialog.get_html_options() or {}
+            self._update_export_summary()
+
+    def _update_export_summary(self):
+        """Update the export options summary label."""
+        format = self.format_combo.currentText()
+        if format == "pdf":
+            if self._pdf_options:
+                parts = []
+                if self._pdf_options.get("pdfaConformance"):
+                    parts.append(self._pdf_options["pdfaConformance"])
+                if self._pdf_options.get("iccProfile"):
+                    parts.append(f"ICC: {self._pdf_options['iccProfile']}")
+                if self._pdf_options.get("userPassword") or self._pdf_options.get("ownerPassword"):
+                    parts.append("Encrypted")
+                if parts:
+                    self.export_summary_label.setText(", ".join(parts))
+                else:
+                    self.export_summary_label.setText("Custom settings")
+            else:
+                self.export_summary_label.setText("Default settings")
+        elif format == "html":
+            if self._html_options:
+                parts = []
+                if not self._html_options.get("embedFonts", True):
+                    parts.append("No fonts")
+                if not self._html_options.get("embedImages", True):
+                    parts.append("No images")
+                if self._html_options.get("useWebSafeFonts"):
+                    parts.append("Web-safe")
+                if self._html_options.get("removeEmptySpace"):
+                    parts.append("Compact")
+                if parts:
+                    self.export_summary_label.setText(", ".join(parts))
+                else:
+                    self.export_summary_label.setText("Custom settings")
+            else:
+                self.export_summary_label.setText("Default settings")
+        else:
+            self.export_summary_label.setText("Default settings")
 
     def _generate(self):
         """Generate the document."""
@@ -904,8 +804,7 @@ class GenerateTab(QWidget):
         self.format_combo.setEnabled(enabled)
         self.output_input.setEnabled(enabled)
         self.output_browse_btn.setEnabled(enabled)
-        self.pdf_options_group.setEnabled(enabled)
-        self.html_options_group.setEnabled(enabled)
+        self.export_options_btn.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
 
     def _log(self, message: str):
