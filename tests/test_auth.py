@@ -282,10 +282,14 @@ class TestTokenRefresh:
         
         result = client.refresh_token(
             "old-refresh-token",
-            auth_endpoint="/auth/refresh"
+            auth_endpoint="/api/v1/auth/refresh"
         )
         
         assert result["access_token"] == "new-access-token"
+        
+        # Verify refresh token is sent in Authorization header
+        call_kwargs = mock_session.post.call_args
+        assert "Bearer old-refresh-token" in call_kwargs.kwargs.get("headers", {}).get("Authorization", "")
     
     def test_refresh_token_expired(self, auth_config, mock_session):
         """Test refresh with expired token."""
@@ -302,5 +306,5 @@ class TestTokenRefresh:
         with pytest.raises(AuthenticationError):
             client.refresh_token(
                 "expired-refresh-token",
-                auth_endpoint="/auth/refresh"
+                auth_endpoint="/api/v1/auth/refresh"
             )

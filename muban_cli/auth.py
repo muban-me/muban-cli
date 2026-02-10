@@ -294,26 +294,27 @@ class MubanAuthClient:
         """
         Refresh an access token using a refresh token.
         
+        The Muban API expects the refresh token to be sent in the
+        Authorization header as a Bearer token, not as a body parameter.
+        
         Args:
             refresh_token: The refresh token
-            auth_endpoint: Optional custom endpoint
+            auth_endpoint: Optional custom endpoint (default: /api/v1/auth/refresh)
         
         Returns:
-            New token data
+            New token data (accessToken, refreshToken, expiresIn, etc.)
         """
-        endpoint = auth_endpoint or "/oauth/token"
+        endpoint = auth_endpoint or "/api/v1/auth/refresh"
         url = urljoin(self.auth_base_url, endpoint.lstrip('/'))
         
-        payload = {
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token
-        }
-        
         try:
+            # Send refresh token in Authorization header as Bearer token
             response = self.session.post(
                 url,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                headers={
+                    "Authorization": f"Bearer {refresh_token}",
+                    "Content-Type": "application/json",
+                },
                 timeout=self.config.timeout,
                 verify=self.config.verify_ssl,
             )
