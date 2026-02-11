@@ -264,10 +264,7 @@ class GenerateTab(QWidget):
         fields_layout = QVBoxLayout(self.fields_group)
         self.fields_group.setVisible(False)  # Hidden until fields are loaded
 
-        # Fields table (shows template field definitions)
-        fields_label = QLabel("Template field definitions:")
-        fields_layout.addWidget(fields_label)
-        
+        # Fields table
         self.fields_table = QTableWidget(0, 3)
         self.fields_table.setHorizontalHeaderLabels(["Name", "Type", "Description"])
         fields_header = self.fields_table.horizontalHeader()
@@ -277,27 +274,36 @@ class GenerateTab(QWidget):
         self.fields_table.setColumnWidth(0, 200)
         self.fields_table.setColumnWidth(1, 80)
         self.fields_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        # Fixed height for fields table (shows ~3-4 rows of field definitions)
-        self.fields_table.setFixedHeight(120)
+        # Allow table to expand with container
+        self.fields_table.setMinimumHeight(80)
         fields_layout.addWidget(self.fields_table)
 
-        # Data editor (for field data) - hidden by default, shown when data is loaded
-        self.data_label = QLabel("Data (JSON for collections - loaded from request):")
-        self.data_label.setVisible(False)
-        fields_layout.addWidget(self.data_label)
+        # Data section - wrapped in a widget for proper layout containment
+        self.data_row_widget = QWidget()
+        data_row = QHBoxLayout(self.data_row_widget)
+        data_row.setContentsMargins(0, 8, 0, 0)
+        data_row.setSpacing(8)
         
-        self.data_editor = QTextEdit()
-        self.data_editor.setPlaceholderText(
-            'Data loaded from request JSON will appear here.\n'
-            'Format: {"field_name": [{"col1": "val1", ...}, ...]}'
-        )
-        self.data_editor.setAcceptRichText(False)
-        self.data_editor.setVisible(False)
-        self.data_editor.setMinimumHeight(100)
-        fields_layout.addWidget(self.data_editor)
+        self.data_label = QLabel("Data JSON:")
+        data_row.addWidget(self.data_label)
         
-        # Set size policy so the group shrinks when data editor is hidden
-        self.fields_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.data_preview = QLabel("")
+        data_row.addWidget(self.data_preview, 1)
+        
+        self.edit_data_btn = QPushButton("Edit...")
+        self.edit_data_btn.setToolTip("Open data editor dialog for viewing and editing JSON data")
+        self.edit_data_btn.clicked.connect(self._open_data_editor)
+        data_row.addWidget(self.edit_data_btn)
+        
+        # Hidden by default
+        self.data_row_widget.setVisible(False)
+        fields_layout.addWidget(self.data_row_widget)
+        
+        # Store data internally
+        self._data_json = ""
+        
+        # Let the group box size naturally
+        self.fields_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
         top_layout.addWidget(self.fields_group)
 
@@ -429,9 +435,9 @@ class GenerateTab(QWidget):
 
         # Clear previous data
         self._fields_data = None
-        self.data_editor.clear()
-        self.data_editor.setVisible(False)
-        self.data_label.setVisible(False)
+        self._data_json = ""
+        self._update_data_preview()
+        self._set_data_row_visible(False)
         self.fields_group.updateGeometry()
 
         self._set_ui_enabled(False)
@@ -589,15 +595,15 @@ class GenerateTab(QWidget):
             # Store and display data
             self._fields_data = data
             if data:
-                self.data_editor.setPlainText(json.dumps(data, indent=2))
-                self.data_editor.setVisible(True)
-                self.data_label.setVisible(True)
+                self._data_json = json.dumps(data, indent=2)
+                self._update_data_preview()
+                self._set_data_row_visible(True)
                 self.fields_group.updateGeometry()
                 self._log(f"✓ Loaded request with parameters and data from {Path(file_path).name}")
             else:
-                self.data_editor.clear()
-                self.data_editor.setVisible(False)
-                self.data_label.setVisible(False)
+                self._data_json = ""
+                self._update_data_preview()
+                self._set_data_row_visible(False)
                 self.fields_group.updateGeometry()
                 self._log(f"✓ Loaded parameters from {Path(file_path).name}")
         except Exception as e:
@@ -654,12 +660,11 @@ class GenerateTab(QWidget):
         return params
 
     def _get_data(self) -> Optional[Dict[str, Any]]:
-        """Get data from editor (user may have edited it)."""
-        data_text = self.data_editor.toPlainText().strip()
-        if not data_text:
-            return self._fields_data  # Return stored data if editor is empty
+        """Get data from internal storage."""
+        if not self._data_json:
+            return self._fields_data
         try:
-            return json.loads(data_text)
+            return json.loads(self._data_json)
         except json.JSONDecodeError:
             return self._fields_data  # Fall back to stored data if JSON is invalid
 
@@ -670,6 +675,49 @@ class GenerateTab(QWidget):
     def _get_html_options(self) -> Optional[Dict[str, Any]]:
         """Get HTML export options."""
         return self._html_options if self._html_options else None
+
+    def _update_data_preview(self):
+        """Update the data preview label with a summary."""
+        if not self._data_json:
+            self.data_preview.setText("")
+            return
+
+        try:
+            data = json.loads(self._data_json)
+            # Count collections and records
+            collections = len(data) if isinstance(data, dict) else 0
+            total_records = 0
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if isinstance(value, list):
+                        total_records += len(value)
+
+            lines = self._data_json.count('\n') + 1
+            chars = len(self._data_json)
+
+            preview = f"{collections} collection(s), {total_records} record(s) | {lines} lines, {chars} chars"
+            self.data_preview.setText(preview)
+        except json.JSONDecodeError:
+            self.data_preview.setText("Invalid JSON")
+
+    def _set_data_row_visible(self, visible: bool):
+        """Show or hide the data row widget."""
+        self.data_row_widget.setVisible(visible)
+
+    def _open_data_editor(self):
+        """Open the data editor dialog."""
+        from muban_cli.gui.dialogs.data_editor_dialog import DataEditorDialog
+
+        dialog = DataEditorDialog(
+            parent=self,
+            data=self._data_json,
+            title="Edit JSON Data"
+        )
+
+        if dialog.exec():
+            self._data_json = dialog.get_data()
+            self._update_data_preview()
+            self._log("✓ Data updated")
 
     def _open_export_options_dialog(self):
         """Open the export options dialog."""
@@ -743,10 +791,9 @@ class GenerateTab(QWidget):
 
         # Validate data JSON if present
         data = self._get_data()
-        data_text = self.data_editor.toPlainText().strip()
-        if data_text and data is None:
+        if self._data_json and data is None:
             try:
-                json.loads(data_text)
+                json.loads(self._data_json)
             except json.JSONDecodeError as e:
                 QMessageBox.warning(self, "Error", f"Invalid data JSON: {e}")
                 return
@@ -803,7 +850,7 @@ class GenerateTab(QWidget):
         self.load_params_btn.setEnabled(enabled)
         self.params_table.setEnabled(enabled)
         self.fields_table.setEnabled(enabled)
-        self.data_editor.setEnabled(enabled)
+        self.edit_data_btn.setEnabled(enabled)
         self.param_name_input.setEnabled(enabled)
         self.param_value_input.setEnabled(enabled)
         self.add_param_btn.setEnabled(enabled)
