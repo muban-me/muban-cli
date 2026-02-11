@@ -132,10 +132,11 @@ class TemplatesTab(QWidget):
     SORT_COLUMNS = {
         1: "name",
         2: "author",
-        3: "created",
+        3: "fileSize",
+        4: "created",
     }
     # Column headers without sort indicator
-    BASE_HEADERS = ["ID", "Name", "Author", "Created"]
+    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Created"]
 
     # Row height for page size calculation (pixels)
     ROW_HEIGHT = 26
@@ -231,7 +232,7 @@ class TemplatesTab(QWidget):
         layout.addLayout(search_layout)
 
         # Templates table
-        self.table = QTableWidget(0, 4)
+        self.table = QTableWidget(0, 5)
         self._update_header_labels()
         header = self.table.horizontalHeader()
         if header:
@@ -244,7 +245,8 @@ class TemplatesTab(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setColumnWidth(0, 280)
         self.table.setColumnWidth(1, 200)
-        self.table.setColumnWidth(2, 250)
+        self.table.setColumnWidth(2, 150)
+        self.table.setColumnWidth(3, 80)
         layout.addWidget(self.table)
 
         # Progress
@@ -400,11 +402,17 @@ class TemplatesTab(QWidget):
             self.table.setItem(i, 0, QTableWidgetItem(t.get("id", "")))
             self.table.setItem(i, 1, QTableWidgetItem(t.get("name", "")))
             self.table.setItem(i, 2, QTableWidgetItem(t.get("author", "")))
+            # Format file size (right-aligned)
+            file_size = t.get("fileSize")
+            size_str = str(file_size) if file_size is not None else ""
+            size_item = QTableWidgetItem(size_str)
+            size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(i, 3, size_item)
             # Format date: "2025-12-18T23:01:39.952558" -> "2025-12-18 23:01:39"
             created = t.get("created", "")
             if created:
                 created = created.replace("T", " ")[:19]
-            self.table.setItem(i, 3, QTableWidgetItem(created))
+            self.table.setItem(i, 4, QTableWidgetItem(created))
 
         # Update vertical header to show absolute row numbers
         start_index = (self._current_page - 1) * self._page_size
