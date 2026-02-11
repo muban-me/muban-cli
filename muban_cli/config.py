@@ -53,6 +53,7 @@ class MubanConfig:
     default_format: str = "pdf"
     verbose: bool = False
     page_size: int = DEFAULT_PAGE_SIZE
+    default_author: str = ""  # Default author for template uploads
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
@@ -65,7 +66,8 @@ class MubanConfig:
         valid_fields = {
             'server_url', 'auth_server_url', 'client_id', 'client_secret',
             'token', 'refresh_token', 'token_expires_at',
-            'timeout', 'verify_ssl', 'default_output_dir', 'default_format', 'verbose', 'page_size'
+            'timeout', 'verify_ssl', 'default_output_dir', 'default_format', 'verbose', 'page_size',
+            'default_author'
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered_data)

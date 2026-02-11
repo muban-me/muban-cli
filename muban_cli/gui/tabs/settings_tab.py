@@ -103,6 +103,10 @@ class SettingsTab(QWidget):
         self.timeout_spin.setSuffix(" seconds")
         server_layout.addRow("Timeout:", self.timeout_spin)
 
+        self.author_input = QLineEdit()
+        self.author_input.setPlaceholderText("Default author for template uploads")
+        server_layout.addRow("Default Author:", self.author_input)
+
         layout.addWidget(server_group)
 
         # Authentication - User credentials
@@ -206,6 +210,7 @@ class SettingsTab(QWidget):
             self.auth_server_input.setText(config.auth_server_url or "")
             self.verify_ssl_cb.setChecked(config.verify_ssl)
             self.timeout_spin.setValue(config.timeout)
+            self.author_input.setText(config.default_author or "")
             self.client_id_input.setText(config.client_id or "")
             self.client_secret_input.setText(config.client_secret or "")
 
@@ -250,6 +255,7 @@ class SettingsTab(QWidget):
             config.auth_server_url = self.auth_server_input.text().strip()
             config.verify_ssl = self.verify_ssl_cb.isChecked()
             config.timeout = self.timeout_spin.value()
+            config.default_author = self.author_input.text().strip()
             config.client_id = self.client_id_input.text().strip()
             config.client_secret = self.client_secret_input.text().strip()
 
@@ -280,6 +286,7 @@ class SettingsTab(QWidget):
             self.auth_server_input.clear()
             self.verify_ssl_cb.setChecked(True)
             self.timeout_spin.setValue(30)
+            self.author_input.clear()
             self.username_input.clear()
             self.password_input.clear()
             self.client_id_input.clear()

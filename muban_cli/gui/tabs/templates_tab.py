@@ -472,8 +472,10 @@ class TemplatesTab(QWidget):
 
         # Ask for metadata
         from muban_cli.gui.dialogs.upload_dialog import UploadDialog
+        from muban_cli.config import get_config_manager
 
-        dialog = UploadDialog(file_path, self)
+        config = get_config_manager().load()
+        dialog = UploadDialog(file_path, config.default_author, self)
         if not dialog.exec():
             return
 
@@ -502,7 +504,7 @@ class TemplatesTab(QWidget):
         QMessageBox.information(
             self,
             "Upload Complete",
-            f"Template uploaded successfully!\nID: {result.get('id', 'N/A')}",
+            "Template uploaded successfully!",
         )
         self._load_templates()
 

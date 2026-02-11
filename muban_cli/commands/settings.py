@@ -51,6 +51,10 @@ def register_settings_commands(cli: click.Group) -> None:
         help='Disable SSL certificate verification'
     )
     @click.option(
+        '--author', '-a',
+        help='Default author name for template uploads'
+    )
+    @click.option(
         '--show',
         is_flag=True,
         help='Show current configuration'
@@ -64,6 +68,7 @@ def register_settings_commands(cli: click.Group) -> None:
         client_secret: Optional[str],
         timeout: Optional[int],
         no_verify_ssl: bool,
+        author: Optional[str],
         show: bool
     ):
         """
@@ -88,11 +93,12 @@ def register_settings_commands(cli: click.Group) -> None:
             click.echo(f"  Token:           {'*' * 20 + '...' if config.token else '(not authenticated)'}")
             click.echo(f"  Timeout:         {config.timeout}s")
             click.echo(f"  Verify SSL:      {config.verify_ssl}")
+            click.echo(f"  Default Author:  {config.default_author or '(not set)'}")
             click.echo(f"  Config Path:     {config_manager.get_config_path()}")
             return
         
         # Interactive configuration if no options provided
-        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl]):
+        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl, author]):
             click.echo("Interactive configuration setup:")
             
             current = config_manager.get()
@@ -113,6 +119,12 @@ def register_settings_commands(cli: click.Group) -> None:
                 default=current.timeout,
                 type=int
             )
+            
+            author = click.prompt(
+                "Default author for template uploads (leave empty for none)",
+                default=current.default_author or '',
+                show_default=False
+            )
         
         # Update configuration
         updates = {}
@@ -128,6 +140,8 @@ def register_settings_commands(cli: click.Group) -> None:
             updates['timeout'] = timeout
         if no_verify_ssl:
             updates['verify_ssl'] = False
+        if author is not None:
+            updates['default_author'] = author
         
         if updates:
             config_manager.update(**updates)

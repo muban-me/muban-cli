@@ -17,9 +17,10 @@ from PyQt6.QtWidgets import (
 class UploadDialog(QDialog):
     """Dialog for entering template upload metadata."""
 
-    def __init__(self, file_path: str, parent=None):
+    def __init__(self, file_path: str, default_author: str = "", parent=None):
         super().__init__(parent)
         self.file_path = Path(file_path)
+        self.default_author = default_author
         self.setWindowTitle("Upload Template")
         self.setMinimumWidth(400)
         self._setup_ui()
@@ -42,6 +43,7 @@ class UploadDialog(QDialog):
 
         # Author
         self.author_input = QLineEdit()
+        self.author_input.setText(self.default_author)
         self.author_input.setPlaceholderText("Author name (optional)")
         form.addRow("Author:", self.author_input)
 
