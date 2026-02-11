@@ -7,6 +7,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 ## Features
 
+- **Graphical User Interface** - Optional PyQt6-based GUI for visual template management and document generation
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates
 - **Template Packaging** - Package JRXML templates with all dependencies (images, subreports) into ZIP
@@ -33,6 +34,16 @@ git clone https://github.com/muban/muban-cli.git
 cd muban-cli
 pip install -e .
 ```
+
+### GUI Installation
+
+To use the graphical user interface, install with GUI extras:
+
+```bash
+pip install muban-cli[gui]
+```
+
+This installs PyQt6 and enables the `muban-gui` command.
 
 ### Development Installation
 
@@ -531,6 +542,69 @@ muban audit logs --truncate 0     # No truncation
 - No pagination headers or decorative text in CSV output
 - The `get` command with `--format csv` outputs a unified table with all template info, parameters, and fields in a single Excel-friendly format
 
+## Graphical User Interface
+
+Muban CLI includes an optional graphical user interface (GUI) for users who prefer a visual approach to template management and document generation.
+
+### Launching the GUI
+
+```bash
+muban-gui
+```
+
+### GUI Features
+
+The GUI provides a tabbed interface with the following sections:
+
+#### **📦 Package Tab**
+
+- Package JRXML template files with all dependencies (images, subreports)
+- Visual asset discovery and preview
+- Font bundling configuration
+- Dry-run mode to preview package contents
+
+#### **📄 Templates Tab**
+
+- Browse all templates on the server with pagination
+- Search and filter templates
+- View template details, parameters, and fields
+- Upload new templates (ZIP format)
+- Download templates to local filesystem
+- Delete templates with confirmation
+
+#### **⚙️ Generate Tab**
+
+- Select template and output format (PDF, XLSX, DOCX, RTF, HTML)
+- Fill in template parameters with a dynamic form
+- Load parameters from JSON file
+- Provide JSON data sources
+- Configure export options:
+  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings
+  - **HTML options**: Resource embedding, single-file output, custom CSS
+- Save generated documents to local filesystem
+
+#### **🖥️ Server Info Tab**
+
+- View server configuration and status
+- List available fonts (server and template-bundled)
+- List available ICC color profiles
+- Check API connectivity and version
+
+#### **⚙️ Settings Tab**
+
+- Configure server URL
+- Set authentication credentials
+- Manage OAuth2 client credentials
+- Test connection to server
+
+### GUI Requirements
+
+- Python 3.9+
+- PyQt6 6.5.0 or later
+- Configured Muban server (via CLI or Settings tab)
+
+The GUI shares configuration with the CLI, so if you've already configured the CLI with `muban configure` and `muban login`, the GUI will use those settings automatically.
+
 ## CI/CD Integration
 
 ### GitHub Actions Example
@@ -691,17 +765,29 @@ muban-cli/
 │   ├── utils.py         # Utility functions (formatting, output)
 │   ├── exceptions.py    # Custom exceptions
 │   ├── py.typed         # PEP 561 marker
-│   └── commands/        # Command modules
-│       ├── __init__.py  # Common options decorator
-│       ├── auth.py      # login, logout, whoami, refresh
-│       ├── templates.py # list, search, get, push, pull, delete
-│       ├── generate.py  # generate documents
-│       ├── async_ops.py # async job management
-│       ├── audit.py     # audit logs and monitoring
-│       ├── admin.py     # admin operations
-│       ├── users.py     # user management
-│       ├── resources.py # fonts, icc-profiles
-│       └── settings.py  # configure, config-clear
+│   ├── commands/        # Command modules
+│   │   ├── __init__.py  # Common options decorator
+│   │   ├── auth.py      # login, logout, whoami, refresh
+│   │   ├── templates.py # list, search, get, push, pull, delete
+│   │   ├── generate.py  # generate documents
+│   │   ├── async_ops.py # async job management
+│   │   ├── audit.py     # audit logs and monitoring
+│   │   ├── admin.py     # admin operations
+│   │   ├── users.py     # user management
+│   │   ├── resources.py # fonts, icc-profiles
+│   │   └── settings.py  # configure, config-clear
+│   └── gui/             # Graphical User Interface (optional)
+│       ├── __init__.py
+│       ├── main.py      # GUI entry point
+│       ├── main_window.py
+│       ├── tabs/        # Tab widgets
+│       │   ├── package_tab.py
+│       │   ├── templates_tab.py
+│       │   ├── generate_tab.py
+│       │   ├── server_info_tab.py
+│       │   └── settings_tab.py
+│       ├── dialogs/     # Dialog windows
+│       └── resources/   # Icons and images
 ├── tests/               # Test suite
 │   ├── conftest.py      # Test fixtures
 │   ├── test_api.py
