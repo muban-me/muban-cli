@@ -595,7 +595,7 @@ class GenerateTab(QWidget):
             # Store and display data
             self._fields_data = data
             if data:
-                self._data_json = json.dumps(data, indent=2)
+                self._data_json = json.dumps(data, indent=2, ensure_ascii=False)
                 self._update_data_preview()
                 self._set_data_row_visible(True)
                 self.fields_group.updateGeometry()
