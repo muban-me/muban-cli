@@ -55,6 +55,11 @@ def register_settings_commands(cli: click.Group) -> None:
         help='Default author name for template uploads'
     )
     @click.option(
+        '--auto-upload/--no-auto-upload',
+        default=None,
+        help='Auto-upload packages after creation'
+    )
+    @click.option(
         '--show',
         is_flag=True,
         help='Show current configuration'
@@ -69,6 +74,7 @@ def register_settings_commands(cli: click.Group) -> None:
         timeout: Optional[int],
         no_verify_ssl: bool,
         author: Optional[str],
+        auto_upload: Optional[bool],
         show: bool
     ):
         """
@@ -94,11 +100,12 @@ def register_settings_commands(cli: click.Group) -> None:
             click.echo(f"  Timeout:         {config.timeout}s")
             click.echo(f"  Verify SSL:      {config.verify_ssl}")
             click.echo(f"  Default Author:  {config.default_author or '(not set)'}")
+            click.echo(f"  Auto-upload:     {config.auto_upload_on_package}")
             click.echo(f"  Config Path:     {config_manager.get_config_path()}")
             return
         
         # Interactive configuration if no options provided
-        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl, author]):
+        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl, author, auto_upload is not None]):
             click.echo("Interactive configuration setup:")
             
             current = config_manager.get()
@@ -142,6 +149,8 @@ def register_settings_commands(cli: click.Group) -> None:
             updates['verify_ssl'] = False
         if author is not None:
             updates['default_author'] = author
+        if auto_upload is not None:
+            updates['auto_upload_on_package'] = auto_upload
         
         if updates:
             config_manager.update(**updates)

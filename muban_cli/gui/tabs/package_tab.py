@@ -27,6 +27,8 @@ from PyQt6.QtWidgets import (
 )
 
 from muban_cli.packager import JRXMLPackager, PackageResult, FontSpec
+from muban_cli.config import get_config_manager
+from muban_cli.api import MubanAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +70,40 @@ class PackageWorker(QThread):
             self.error.emit(str(e))
 
 
+class UploadWorker(QThread):
+    """Worker thread for auto-upload after packaging."""
+
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, client: MubanAPIClient, file_path: Path, name: str, author: str):
+        super().__init__()
+        self.client = client
+        self.file_path = file_path
+        self.name = name
+        self.author = author
+
+    def run(self):
+        try:
+            result = self.client.upload_template(
+                self.file_path,
+                name=self.name,
+                author=self.author,
+            )
+            self.finished.emit(result)
+        except Exception as e:
+            logger.exception("Failed to upload template")
+            self.error.emit(str(e))
+
+
 class PackageTab(QWidget):
     """Tab for packaging JRXML templates."""
 
     def __init__(self):
         super().__init__()
         self._fonts: List[FontSpec] = []
+        self._last_package_result: Optional[PackageResult] = None
+        self._upload_worker: Optional[UploadWorker] = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -294,9 +324,8 @@ class PackageTab(QWidget):
     def _on_package_finished(self, result: PackageResult):
         """Handle successful packaging."""
         try:
-            self._set_ui_enabled(True)
-            self.progress.setVisible(False)
-
+            self._last_package_result = result
+            
             if result.success:
                 is_dry_run = self.dry_run_cb.isChecked()
                 if is_dry_run:
@@ -316,11 +345,22 @@ class PackageTab(QWidget):
                     self._log("\n⚠ Missing assets:")
                     for asset in result.assets_missing:
                         self._log(f"  - {asset}")
+                
+                # Auto-upload if enabled and not dry run
+                if not is_dry_run and result.output_path:
+                    self._try_auto_upload(result.output_path)
+                else:
+                    self._set_ui_enabled(True)
+                    self.progress.setVisible(False)
             else:
+                self._set_ui_enabled(True)
+                self.progress.setVisible(False)
                 self._log(f"\n✗ Packaging failed")
                 for error in result.errors:
                     self._log(f"  Error: {error}")
         except Exception as e:
+            self._set_ui_enabled(True)
+            self.progress.setVisible(False)
             logger.exception("Error displaying packaging results")
             self._log(f"\n✗ Error displaying results: {e}")
 
@@ -330,6 +370,68 @@ class PackageTab(QWidget):
         self.progress.setVisible(False)
         self._log(f"\n✗ Error: {error}")
         QMessageBox.critical(self, "Packaging Error", error)
+
+    def _try_auto_upload(self, output_path: Path):
+        """Attempt auto-upload if enabled in config."""
+        try:
+            config = get_config_manager().load()
+            
+            if not config.auto_upload_on_package:
+                self._set_ui_enabled(True)
+                self.progress.setVisible(False)
+                return
+            
+            if not config.is_authenticated():
+                self._log("\n⚠ Auto-upload skipped: Not authenticated")
+                self._set_ui_enabled(True)
+                self.progress.setVisible(False)
+                return
+            
+            if not config.default_author:
+                self._log("\n⚠ Auto-upload skipped: Default author not set in settings")
+                self._set_ui_enabled(True)
+                self.progress.setVisible(False)
+                return
+            
+            # Use filename stem as template name
+            template_name = output_path.stem
+            
+            self._log(f"\n📤 Auto-uploading to server...")
+            self._log(f"  Name: {template_name}")
+            self._log(f"  Author: {config.default_author}")
+            
+            client = MubanAPIClient(config)
+            self._upload_worker = UploadWorker(
+                client,
+                output_path,
+                template_name,
+                config.default_author,
+            )
+            self._upload_worker.finished.connect(self._on_upload_finished)
+            self._upload_worker.error.connect(self._on_upload_error)
+            self._upload_worker.start()
+            
+        except Exception as e:
+            logger.exception("Error during auto-upload setup")
+            self._log(f"\n✗ Auto-upload error: {e}")
+            self._set_ui_enabled(True)
+            self.progress.setVisible(False)
+
+    def _on_upload_finished(self, result: dict):
+        """Handle successful upload."""
+        self._set_ui_enabled(True)
+        self.progress.setVisible(False)
+        
+        template = result.get('data', {})
+        self._log(f"\n✓ Template uploaded successfully!")
+        self._log(f"  ID: {template.get('id')}")
+        self._log(f"  Name: {template.get('name')}")
+
+    def _on_upload_error(self, error: str):
+        """Handle upload error."""
+        self._set_ui_enabled(True)
+        self.progress.setVisible(False)
+        self._log(f"\n✗ Auto-upload failed: {error}")
 
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""

@@ -107,6 +107,10 @@ class SettingsTab(QWidget):
         self.author_input.setPlaceholderText("Default author for template uploads")
         server_layout.addRow("Default Author:", self.author_input)
 
+        self.auto_upload_cb = QCheckBox("Auto-upload after packaging")
+        self.auto_upload_cb.setToolTip("Automatically upload templates after successful packaging")
+        server_layout.addRow("", self.auto_upload_cb)
+
         layout.addWidget(server_group)
 
         # Authentication - User credentials
@@ -211,6 +215,7 @@ class SettingsTab(QWidget):
             self.verify_ssl_cb.setChecked(config.verify_ssl)
             self.timeout_spin.setValue(config.timeout)
             self.author_input.setText(config.default_author or "")
+            self.auto_upload_cb.setChecked(config.auto_upload_on_package)
             self.client_id_input.setText(config.client_id or "")
             self.client_secret_input.setText(config.client_secret or "")
 
@@ -256,6 +261,7 @@ class SettingsTab(QWidget):
             config.verify_ssl = self.verify_ssl_cb.isChecked()
             config.timeout = self.timeout_spin.value()
             config.default_author = self.author_input.text().strip()
+            config.auto_upload_on_package = self.auto_upload_cb.isChecked()
             config.client_id = self.client_id_input.text().strip()
             config.client_secret = self.client_secret_input.text().strip()
 
@@ -287,6 +293,7 @@ class SettingsTab(QWidget):
             self.verify_ssl_cb.setChecked(True)
             self.timeout_spin.setValue(30)
             self.author_input.clear()
+            self.auto_upload_cb.setChecked(False)
             self.username_input.clear()
             self.password_input.clear()
             self.client_id_input.clear()

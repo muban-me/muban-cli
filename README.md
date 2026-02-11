@@ -174,6 +174,15 @@ muban configure --server https://api.muban.me
 # Set auth server (if different from API server)
 muban configure --auth-server https://auth.muban.me
 
+# Set default author for template uploads
+muban configure --author "John Doe"
+
+# Enable auto-upload after packaging
+muban configure --auto-upload
+
+# Disable auto-upload
+muban configure --no-auto-upload
+
 # Show current configuration
 muban configure --show
 
@@ -246,6 +255,12 @@ muban package template.jrxml \
 muban package template.jrxml \
   --font-file arial.ttf --font-name "Arial Custom" --font-face normal --embedded \
   --font-file times.ttf --font-name "Times Custom" --font-face normal --no-embedded
+
+# Package and upload in one step
+muban package template.jrxml --upload
+
+# Package and upload with custom name/author
+muban package template.jrxml --upload --name "My Report" --author "John Doe"
 ```
 
 **Features:**
@@ -257,6 +272,7 @@ muban package template.jrxml \
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
 - **URL Skipping** - Automatically skips remote resources (http://, https://, etc.)
 - **POSIX Path Handling** - Correctly handles path concatenation (e.g., `"../" + "/img"` → `"../img"`)
+- **Auto-Upload** - Optionally upload immediately after packaging with `--upload` flag or enable globally via `muban configure --auto-upload`
 
 **Example Output (verbose mode):**
 
@@ -562,6 +578,7 @@ The GUI provides a tabbed interface with the following sections:
 - Visual asset discovery and preview
 - Font bundling configuration
 - Dry-run mode to preview package contents
+- Auto-upload to server after packaging (when enabled in Settings)
 
 #### **📄 Templates Tab**
 
@@ -595,6 +612,8 @@ The GUI provides a tabbed interface with the following sections:
 - Configure server URL
 - Set authentication credentials
 - Manage OAuth2 client credentials
+- Set default author for template uploads
+- Enable/disable auto-upload after packaging
 - Test connection to server
 
 ### GUI Requirements

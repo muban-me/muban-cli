@@ -11,6 +11,7 @@ from typing import Optional, Tuple, List
 
 from ..packager import JRXMLPackager, PackageResult, FontSpec
 from ..utils import print_success, print_error, print_warning, print_info
+from ..config import get_config_manager
 
 
 def validate_font_options(ctx, param, value):
@@ -39,6 +40,19 @@ def validate_font_options(ctx, param, value):
     '--reports-dir-param',
     default='REPORTS_DIR',
     help='Name of the path parameter in JRXML (default: REPORTS_DIR)'
+)
+@click.option(
+    '--upload', '-u',
+    is_flag=True,
+    help='Upload the package after creation'
+)
+@click.option(
+    '--name', '-n',
+    help='Template name for upload (default: filename without extension)'
+)
+@click.option(
+    '--author', '-a',
+    help='Template author for upload (uses default_author from config if set)'
 )
 @click.option(
     '--font-file',
@@ -71,6 +85,9 @@ def package_cmd(
     dry_run: bool,
     verbose: bool,
     reports_dir_param: str,
+    upload: bool,
+    name: Optional[str],
+    author: Optional[str],
     font_file: Tuple[Path, ...],
     font_name: Tuple[str, ...],
     font_face: Tuple[str, ...],
@@ -96,6 +113,10 @@ def package_cmd(
       
       # Use custom path parameter name
       muban package template.jrxml --reports-dir-param BASE_PATH
+      
+      # Package and upload in one step
+      muban package template.jrxml --upload
+      muban package template.jrxml -u --name "My Report" --author "John"
       
       # Include custom fonts in the package
       muban package template.jrxml \\
@@ -160,6 +181,60 @@ def package_cmd(
     
     # Exit with appropriate code
     if not result.success:
+        raise SystemExit(1)
+    
+    # Upload if requested
+    if upload and result.success and not dry_run:
+        _upload_package(result.output_path, name, author, verbose)
+
+
+def _upload_package(output_path: Path, name: Optional[str], author: Optional[str], verbose: bool):
+    """Upload the packaged template to the server."""
+    from ..api import MubanAPIClient
+    from ..exceptions import MubanError, PermissionDeniedError, AuthenticationError
+    
+    config = get_config_manager().get()
+    
+    if not config.is_authenticated():
+        print_error("Not authenticated. Run 'muban login' first.")
+        raise SystemExit(1)
+    
+    # Use filename stem as default name
+    template_name = name or output_path.stem
+    # Use config default_author if author not specified
+    template_author = author or config.default_author
+    
+    if not template_author:
+        print_error("Author is required. Use --author or set default_author in config.")
+        raise SystemExit(1)
+    
+    click.echo()
+    print_info(f"Uploading package to server...")
+    if verbose:
+        print_info(f"  Name: {template_name}")
+        print_info(f"  Author: {template_author}")
+    
+    try:
+        with MubanAPIClient(config) as client:
+            result = client.upload_template(
+                file_path=output_path,
+                name=template_name,
+                author=template_author,
+            )
+            
+            template = result.get('data', {})
+            print_success("Template uploaded successfully!")
+            click.echo(f"  ID: {template.get('id')}")
+            click.echo(f"  Name: {template.get('name')}")
+            
+    except AuthenticationError:
+        print_error("Authentication failed. Run 'muban login' to re-authenticate.")
+        raise SystemExit(1)
+    except PermissionDeniedError:
+        print_error("Permission denied. Manager role required for upload.")
+        raise SystemExit(1)
+    except MubanError as e:
+        print_error(f"Upload failed: {e}")
         raise SystemExit(1)
 
 
