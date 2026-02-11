@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMessageBox,
     QWidget,
+    QCheckBox,
 )
 
 
@@ -131,6 +132,12 @@ class DataEditorDialog(QDialog):
 
         toolbar.addStretch()
 
+        # Wrap toggle
+        self.wrap_cb = QCheckBox("Wrap lines")
+        self.wrap_cb.setChecked(True)
+        self.wrap_cb.stateChanged.connect(self._toggle_wrap)
+        toolbar.addWidget(self.wrap_cb)
+
         # Status label
         self.status_label = QLabel("")
         toolbar.addWidget(self.status_label)
@@ -154,7 +161,7 @@ class DataEditorDialog(QDialog):
         font.setStyleHint(QFont.StyleHint.Monospace)
         self.editor.setFont(font)
         self.editor.setTabStopDistance(20)  # 2 spaces worth
-        self.editor.setLineWrapMode(CodeEditor.LineWrapMode.NoWrap)
+        self.editor.setLineWrapMode(CodeEditor.LineWrapMode.WidgetWidth)
         self.editor.textChanged.connect(self._update_status)
         layout.addWidget(self.editor)
 
@@ -187,6 +194,13 @@ class DataEditorDialog(QDialog):
         chars = len(text)
         self.line_count_label.setText(f"Lines: {lines}")
         self.char_count_label.setText(f"Characters: {chars}")
+
+    def _toggle_wrap(self, state):
+        """Toggle line wrapping."""
+        if state:
+            self.editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        else:
+            self.editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
 
     def _format_json(self):
         """Format JSON with proper indentation."""
