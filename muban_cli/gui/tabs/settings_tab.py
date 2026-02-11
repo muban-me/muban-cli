@@ -2,6 +2,7 @@
 Settings Tab - Server configuration and authentication.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -24,6 +25,8 @@ from PyQt6.QtWidgets import (
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
 
+logger = logging.getLogger(__name__)
+
 
 class LoginWorker(QThread):
     """Worker thread for login operations."""
@@ -42,6 +45,7 @@ class LoginWorker(QThread):
             result = self.auth_client.login(self.username, self.password)
             self.finished.emit(result)
         except Exception as e:
+            logger.exception("Login failed")
             self.error.emit(str(e))
 
 
@@ -62,6 +66,7 @@ class ClientCredentialsWorker(QThread):
             result = self.auth_client.client_credentials_login(self.client_id, self.client_secret)
             self.finished.emit(result)
         except Exception as e:
+            logger.exception("Client credentials login failed")
             self.error.emit(str(e))
 
 

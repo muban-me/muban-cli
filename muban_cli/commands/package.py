@@ -277,7 +277,8 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
                 font_families[font.name] = []
             font_families[font.name].append(font)
         
-        click.echo(click.style(f"Fonts included: {len(font_families)} family(ies), {len(fonts)} file(s)", bold=True))
+        unique_files = len({f.file_path for f in fonts})
+        click.echo(click.style(f"Fonts included: {len(font_families)} family(ies), {unique_files} file(s)", bold=True))
         if verbose:
             for family_name, family_fonts in font_families.items():
                 faces = [f.face for f in family_fonts]
@@ -290,10 +291,12 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
         if dry_run:
             print_info(f"Dry run complete. Would create: {result.output_path}")
             if fonts:
-                print_info(f"Would include fonts.xml + {len(fonts)} font file(s)")
+                unique_font_files = len({f.file_path for f in fonts})
+                print_info(f"Would include fonts.xml + {unique_font_files} font file(s)")
         else:
             total_assets = len(result.assets_included)
-            font_info = f" + {len(fonts)} fonts" if fonts else ""
+            unique_font_count = len({f.file_path for f in fonts}) if fonts else 0
+            font_info = f" + {unique_font_count} fonts" if fonts else ""
             print_success(f"Package created: {result.output_path}")
             click.echo(f"  Contents: 1 JRXML + {total_assets} assets{font_info}")
             

@@ -510,11 +510,14 @@ class JRXMLPackager:
                 zf.writestr('fonts.xml', fonts_xml)
                 logger.debug("Added: fonts.xml")
                 
-                # Add font files to fonts/ directory
+                # Add font files to fonts/ directory (deduplicate by file path)
+                added_font_files: set = set()
                 for font in fonts:
-                    archive_font_path = f"fonts/{font.file_path.name}"
-                    zf.write(font.file_path, archive_font_path)
-                    logger.debug(f"Added: {archive_font_path}")
+                    if font.file_path not in added_font_files:
+                        archive_font_path = f"fonts/{font.file_path.name}"
+                        zf.write(font.file_path, archive_font_path)
+                        logger.debug(f"Added: {archive_font_path}")
+                        added_font_files.add(font.file_path)
         
         logger.info(f"Created ZIP: {output_path}")
     

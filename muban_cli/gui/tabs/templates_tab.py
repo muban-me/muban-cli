@@ -2,6 +2,7 @@
 Templates Tab - List and manage templates on the server.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -27,6 +28,8 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateWorker(QThread):
@@ -92,6 +95,7 @@ class TemplateWorker(QThread):
                 'total_items': total_items
             })
         except Exception as e:
+            logger.exception("Failed to load templates")
             self.error.emit(str(e))
 
 
@@ -117,6 +121,7 @@ class UploadWorker(QThread):
             )
             self.finished.emit(result)
         except Exception as e:
+            logger.exception("Failed to upload template")
             self.error.emit(str(e))
 
 

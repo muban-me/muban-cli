@@ -2,6 +2,7 @@
 Server Info Tab - Display server resources (fonts, ICC profiles).
 """
 
+import logging
 from typing import Optional, List, Dict, Any
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -24,6 +25,8 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 class FontsWorker(QThread):
@@ -51,6 +54,7 @@ class FontsWorker(QThread):
                 fonts = result
             self.finished.emit(fonts if isinstance(fonts, list) else [])
         except Exception as e:
+            logger.exception("Failed to load fonts")
             self.error.emit(str(e))
 
 
@@ -79,6 +83,7 @@ class ICCProfilesWorker(QThread):
                 profiles = result
             self.finished.emit(profiles if isinstance(profiles, list) else [])
         except Exception as e:
+            logger.exception("Failed to load ICC profiles")
             self.error.emit(str(e))
 
 

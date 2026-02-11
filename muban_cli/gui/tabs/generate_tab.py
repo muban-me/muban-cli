@@ -3,6 +3,7 @@ Generate Tab - Generate documents from templates.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -30,6 +31,8 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 class GenerateWorker(QThread):
@@ -74,6 +77,7 @@ class GenerateWorker(QThread):
             )
             self.finished.emit(str(self.output_path))
         except Exception as e:
+            logger.exception("Document generation failed")
             self.error.emit(str(e))
 
 
@@ -105,6 +109,7 @@ class ParametersWorker(QThread):
                 params = result
             self.finished.emit(params if isinstance(params, list) else [])
         except Exception as e:
+            logger.exception("Failed to load template parameters")
             self.error.emit(str(e))
 
 
@@ -133,6 +138,7 @@ class FieldsWorker(QThread):
                 fields = result
             self.finished.emit(fields if isinstance(fields, list) else [])
         except Exception as e:
+            logger.exception("Failed to load template fields")
             self.error.emit(str(e))
 
 
@@ -161,6 +167,7 @@ class ICCProfilesWorker(QThread):
                 profiles = result
             self.finished.emit(profiles if isinstance(profiles, list) else [])
         except Exception as e:
+            logger.exception("Failed to load ICC profiles")
             self.error.emit(str(e))
 
 

@@ -2,6 +2,7 @@
 Package Tab - JRXML template packaging with dependencies.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -26,6 +27,8 @@ from PyQt6.QtWidgets import (
 )
 
 from muban_cli.packager import JRXMLPackager, PackageResult, FontSpec
+
+logger = logging.getLogger(__name__)
 
 
 class PackageWorker(QThread):
@@ -61,6 +64,7 @@ class PackageWorker(QThread):
             )
             self.finished.emit(result)
         except Exception as e:
+            logger.exception("Packaging failed")
             self.error.emit(str(e))
 
 
@@ -238,12 +242,18 @@ class PackageTab(QWidget):
 
     def _refresh_fonts_table(self):
         """Refresh the fonts table."""
+        from PyQt6.QtCore import Qt
         self.fonts_table.setRowCount(len(self._fonts))
         for i, font in enumerate(self._fonts):
-            self.fonts_table.setItem(i, 0, QTableWidgetItem(font.file_path.name))
-            self.fonts_table.setItem(i, 1, QTableWidgetItem(font.name))
-            self.fonts_table.setItem(i, 2, QTableWidgetItem(font.face))
-            self.fonts_table.setItem(i, 3, QTableWidgetItem("Yes" if font.embedded else "No"))
+            items = [
+                QTableWidgetItem(font.file_path.name),
+                QTableWidgetItem(font.name),
+                QTableWidgetItem(font.face),
+                QTableWidgetItem("Yes" if font.embedded else "No"),
+            ]
+            for col, item in enumerate(items):
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.fonts_table.setItem(i, col, item)
 
     def _run_package(self):
         """Run the packaging operation."""
@@ -283,27 +293,36 @@ class PackageTab(QWidget):
 
     def _on_package_finished(self, result: PackageResult):
         """Handle successful packaging."""
-        self._set_ui_enabled(True)
-        self.progress.setVisible(False)
+        try:
+            self._set_ui_enabled(True)
+            self.progress.setVisible(False)
 
-        if result.success:
-            self._log(f"\n✓ Package created: {result.output_path}")
-            self._log(f"  Main template: {result.main_jrxml}")
-            self._log(f"  Assets: {len(result.assets_included)} included, {len(result.assets_missing)} missing")
-            if result.fonts_included:
-                self._log(f"  Fonts: {len(result.fonts_included)} file(s)")
-            if result.output_path:
-                size_kb = result.output_path.stat().st_size / 1024
-                self._log(f"  Size: {size_kb:.1f} KB")
+            if result.success:
+                is_dry_run = self.dry_run_cb.isChecked()
+                if is_dry_run:
+                    self._log(f"\n✓ Dry run complete. Would create: {result.output_path}")
+                else:
+                    self._log(f"\n✓ Package created: {result.output_path}")
+                self._log(f"  Main template: {result.main_jrxml}")
+                self._log(f"  Assets: {len(result.assets_included)} included, {len(result.assets_missing)} missing")
+                if result.fonts_included:
+                    unique_font_files = len({f.file_path for f in result.fonts_included})
+                    self._log(f"  Fonts: {unique_font_files} file(s)")
+                if not is_dry_run and result.output_path and result.output_path.exists():
+                    size_kb = result.output_path.stat().st_size / 1024
+                    self._log(f"  Size: {size_kb:.1f} KB")
 
-            if len(result.assets_missing) > 0:
-                self._log("\n⚠ Missing assets:")
-                for asset in result.assets_missing:
-                    self._log(f"  - {asset}")
-        else:
-            self._log(f"\n✗ Packaging failed")
-            for error in result.errors:
-                self._log(f"  Error: {error}")
+                if len(result.assets_missing) > 0:
+                    self._log("\n⚠ Missing assets:")
+                    for asset in result.assets_missing:
+                        self._log(f"  - {asset}")
+            else:
+                self._log(f"\n✗ Packaging failed")
+                for error in result.errors:
+                    self._log(f"  Error: {error}")
+        except Exception as e:
+            logger.exception("Error displaying packaging results")
+            self._log(f"\n✗ Error displaying results: {e}")
 
     def _on_package_error(self, error: str):
         """Handle packaging error."""
