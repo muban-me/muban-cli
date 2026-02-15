@@ -243,3 +243,165 @@ class TestAPIErrorHandling:
             client.list_templates()
         
         assert "Direct error message" in str(exc_info.value)
+
+
+class TestUploadTemplate:
+    """Tests for uploading templates."""
+    
+    @responses.activate
+    def test_upload_template_success(self, client, tmp_path):
+        """Test uploading a template successfully."""
+        # Create a test ZIP file
+        zip_file = tmp_path / "test-template.zip"
+        zip_file.write_bytes(b"PK\x03\x04fake zip content")
+        
+        mock_response = {
+            "data": {
+                "id": "uploaded-template-123",
+                "name": "Test Template",
+                "author": "Test Author",
+                "fileSize": 100
+            }
+        }
+        
+        responses.add(
+            responses.POST,
+            "https://test.muban.me/api/v1/templates/upload",
+            json=mock_response,
+            status=200
+        )
+        
+        result = client.upload_template(
+            file_path=zip_file,
+            name="Test Template",
+            author="Test Author"
+        )
+        
+        assert result["data"]["id"] == "uploaded-template-123"
+        assert result["data"]["name"] == "Test Template"
+    
+    @responses.activate
+    def test_upload_template_with_metadata(self, client, tmp_path):
+        """Test uploading a template with metadata."""
+        zip_file = tmp_path / "test-template.zip"
+        zip_file.write_bytes(b"PK\x03\x04fake zip content")
+        
+        mock_response = {
+            "data": {
+                "id": "uploaded-template-456",
+                "name": "Template With Metadata",
+                "author": "Author",
+                "metadata": '{"key": "value"}'
+            }
+        }
+        
+        responses.add(
+            responses.POST,
+            "https://test.muban.me/api/v1/templates/upload",
+            json=mock_response,
+            status=200
+        )
+        
+        result = client.upload_template(
+            file_path=zip_file,
+            name="Template With Metadata",
+            author="Author",
+            metadata='{"key": "value"}'
+        )
+        
+        assert result["data"]["id"] == "uploaded-template-456"
+    
+    def test_upload_nonexistent_file(self, client, tmp_path):
+        """Test uploading a nonexistent file raises ValidationError."""
+        nonexistent_path = tmp_path / "nonexistent.zip"
+        
+        with pytest.raises(ValidationError) as exc_info:
+            client.upload_template(
+                file_path=nonexistent_path,
+                name="Test",
+                author="Author"
+            )
+        
+        assert "not found" in str(exc_info.value).lower()
+    
+    def test_upload_non_zip_file(self, client, tmp_path):
+        """Test uploading a non-ZIP file raises ValidationError."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not a zip file")
+        
+        with pytest.raises(ValidationError) as exc_info:
+            client.upload_template(
+                file_path=txt_file,
+                name="Test",
+                author="Author"
+            )
+        
+        assert "zip" in str(exc_info.value).lower()
+
+
+class TestDownloadTemplate:
+    """Tests for downloading templates."""
+    
+    @responses.activate
+    def test_download_template_success(self, client, tmp_path):
+        """Test downloading a template successfully."""
+        template_id = "download-me-123"
+        output_path = tmp_path / "downloaded.zip"
+        
+        # Mock the download endpoint
+        responses.add(
+            responses.GET,
+            f"https://test.muban.me/api/v1/templates/{template_id}/download",
+            body=b"PK\x03\x04fake zip content",
+            status=200,
+            content_type="application/zip"
+        )
+        
+        result_path = client.download_template(
+            template_id=template_id,
+            output_path=output_path
+        )
+        
+        assert result_path == output_path
+        assert output_path.exists()
+        assert output_path.read_bytes() == b"PK\x03\x04fake zip content"
+    
+    @responses.activate
+    def test_download_template_default_path(self, client, tmp_path, monkeypatch):
+        """Test downloading a template with default output path."""
+        template_id = "download-default-456"
+        
+        # Change to temp directory so default file is created there
+        monkeypatch.chdir(tmp_path)
+        
+        responses.add(
+            responses.GET,
+            f"https://test.muban.me/api/v1/templates/{template_id}/download",
+            body=b"PK\x03\x04fake zip content",
+            status=200,
+            content_type="application/zip"
+        )
+        
+        result_path = client.download_template(template_id=template_id)
+        
+        assert result_path.name == f"{template_id}.zip"
+        assert result_path.exists()
+    
+    @responses.activate
+    def test_download_nonexistent_template(self, client, tmp_path):
+        """Test downloading a nonexistent template raises error."""
+        template_id = "nonexistent-id"
+        output_path = tmp_path / "output.zip"
+        
+        responses.add(
+            responses.GET,
+            f"https://test.muban.me/api/v1/templates/{template_id}/download",
+            json={"errors": [{"message": "Template not found"}]},
+            status=404
+        )
+        
+        with pytest.raises(TemplateNotFoundError):
+            client.download_template(
+                template_id=template_id,
+                output_path=output_path
+            )

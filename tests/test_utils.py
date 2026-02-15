@@ -192,3 +192,103 @@ class TestPrintCsv:
         print_csv(headers, rows)
         captured = capsys.readouterr()
         assert "Col1,Col2" in captured.out
+
+
+class TestPrintFunctions:
+    """Tests for print_* utility functions."""
+    
+    def test_print_success(self, capsys):
+        """Test print_success output."""
+        from muban_cli.utils import print_success
+        print_success("Operation completed")
+        captured = capsys.readouterr()
+        assert "Operation completed" in captured.out
+    
+    def test_print_error_simple(self, capsys):
+        """Test print_error without details."""
+        from muban_cli.utils import print_error
+        print_error("Something went wrong")
+        captured = capsys.readouterr()
+        assert "Something went wrong" in captured.err
+    
+    def test_print_error_with_details(self, capsys):
+        """Test print_error with details."""
+        from muban_cli.utils import print_error
+        print_error("Error occurred", details="Additional info here")
+        captured = capsys.readouterr()
+        assert "Error occurred" in captured.err
+        assert "Additional info here" in captured.err
+    
+    def test_print_warning(self, capsys):
+        """Test print_warning output."""
+        from muban_cli.utils import print_warning
+        print_warning("Watch out!")
+        captured = capsys.readouterr()
+        assert "Watch out!" in captured.out
+    
+    def test_print_info(self, capsys):
+        """Test print_info output."""
+        from muban_cli.utils import print_info
+        print_info("Just so you know")
+        captured = capsys.readouterr()
+        assert "Just so you know" in captured.out
+
+
+class TestPrintTable:
+    """Tests for print_table function."""
+    
+    def test_print_basic_table(self, capsys):
+        """Test basic table output."""
+        from muban_cli.utils import print_table
+        headers = ["Name", "Age"]
+        rows = [["Alice", "30"], ["Bob", "25"]]
+        print_table(headers, rows)
+        captured = capsys.readouterr()
+        assert "Name" in captured.out
+        assert "Age" in captured.out
+        assert "Alice" in captured.out
+        assert "Bob" in captured.out
+    
+    def test_print_empty_table(self, capsys):
+        """Test table with no rows."""
+        from muban_cli.utils import print_table
+        headers = ["X", "Y"]
+        rows = []
+        print_table(headers, rows)
+        captured = capsys.readouterr()
+        # Should at least print headers
+        assert "X" in captured.out
+        assert "Y" in captured.out
+
+
+class TestPrintJson:
+    """Tests for print_json function."""
+    
+    def test_print_dict(self, capsys):
+        """Test printing dictionary as JSON."""
+        from muban_cli.utils import print_json
+        data = {"name": "Test", "count": 42}
+        print_json(data)
+        captured = capsys.readouterr()
+        assert '"name"' in captured.out
+        assert '"Test"' in captured.out
+        assert "42" in captured.out
+    
+    def test_print_list(self, capsys):
+        """Test printing list as JSON."""
+        from muban_cli.utils import print_json
+        data = [1, 2, 3]
+        print_json(data)
+        captured = capsys.readouterr()
+        assert "1" in captured.out
+        assert "2" in captured.out
+        assert "3" in captured.out
+    
+    def test_print_with_custom_indent(self, capsys):
+        """Test printing JSON with custom indentation."""
+        from muban_cli.utils import print_json
+        data = {"key": "value"}
+        print_json(data, indent=4)
+        captured = capsys.readouterr()
+        # 4-space indent
+        assert '    "key"' in captured.out
