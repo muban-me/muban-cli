@@ -54,6 +54,7 @@ class PackageResult:
     assets_missing: List[AssetReference] = field(default_factory=list)
     assets_included: List[Path] = field(default_factory=list)
     fonts_included: List[FontSpec] = field(default_factory=list)  # Fonts bundled in package
+    fonts_xml_files: List[Path] = field(default_factory=list)  # Font files from fonts.xml
     skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     errors: List[str] = field(default_factory=list)
@@ -259,8 +260,12 @@ class JRXMLPackager:
         logger.info(f"  - Included: {len(result.assets_included)}")
         logger.info(f"  - Missing: {len(result.assets_missing)}")
         
-        # Store fonts in result
-        result.fonts_included = fonts
+        # Store fonts in result - only if not using fonts.xml
+        if fonts_xml_path and fonts_xml_path.exists():
+            parsed_fonts = self._parse_fonts_xml(fonts_xml_path)
+            result.fonts_xml_files = [abs_path for _, abs_path in parsed_fonts if abs_path.exists()]
+        else:
+            result.fonts_included = fonts
         
         if dry_run:
             result.success = True

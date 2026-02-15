@@ -167,6 +167,7 @@ class PackageTab(QWidget):
         self.fonts_xml_clear_btn = QPushButton("Clear")
         self.fonts_xml_clear_btn.clicked.connect(self._clear_fonts_xml)
         fonts_xml_layout.addWidget(self.fonts_xml_clear_btn)
+        self.fonts_xml_input.textChanged.connect(self._on_fonts_xml_changed)
         fonts_layout.addLayout(fonts_xml_layout)
 
         # Separator label
@@ -299,6 +300,13 @@ class PackageTab(QWidget):
         """Clear the fonts.xml path."""
         self.fonts_xml_input.clear()
 
+    def _on_fonts_xml_changed(self, text: str):
+        """Enable/disable manual font controls based on fonts.xml input."""
+        has_fonts_xml = bool(text.strip())
+        self.fonts_table.setEnabled(not has_fonts_xml)
+        self.add_font_btn.setEnabled(not has_fonts_xml)
+        self.remove_font_btn.setEnabled(not has_fonts_xml)
+
     def _remove_font(self):
         """Remove selected font."""
         rows = set(item.row() for item in self.fonts_table.selectedItems())
@@ -384,6 +392,8 @@ class PackageTab(QWidget):
                 if result.fonts_included:
                     unique_font_files = len({f.file_path for f in result.fonts_included})
                     self._log(f"  Fonts: {unique_font_files} file(s)")
+                elif result.fonts_xml_files:
+                    self._log(f"  Fonts: {len(result.fonts_xml_files)} file(s) from fonts.xml")
                 if not is_dry_run and result.output_path and result.output_path.exists():
                     size_kb = result.output_path.stat().st_size / 1024
                     self._log(f"  Size: {size_kb:.1f} KB")
@@ -490,9 +500,11 @@ class PackageTab(QWidget):
         self.fonts_xml_input.setEnabled(enabled)
         self.fonts_xml_browse_btn.setEnabled(enabled)
         self.fonts_xml_clear_btn.setEnabled(enabled)
-        self.fonts_table.setEnabled(enabled)
-        self.add_font_btn.setEnabled(enabled)
-        self.remove_font_btn.setEnabled(enabled)
+        # Font controls respect fonts.xml state when re-enabling
+        has_fonts_xml = bool(self.fonts_xml_input.text().strip())
+        self.fonts_table.setEnabled(enabled and not has_fonts_xml)
+        self.add_font_btn.setEnabled(enabled and not has_fonts_xml)
+        self.remove_font_btn.setEnabled(enabled and not has_fonts_xml)
         self.dry_run_cb.setEnabled(enabled)
         self.package_btn.setEnabled(enabled)
 
