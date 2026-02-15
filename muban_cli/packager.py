@@ -14,6 +14,7 @@ The packager:
 import re
 import zipfile
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Set, Tuple, Optional, Dict
 from dataclasses import dataclass, field
@@ -140,7 +141,8 @@ class JRXMLPackager:
         jrxml_path: Path,
         output_path: Optional[Path] = None,
         dry_run: bool = False,
-        fonts: Optional[List[FontSpec]] = None
+        fonts: Optional[List[FontSpec]] = None,
+        fonts_xml_path: Optional[Path] = None
     ) -> PackageResult:
         """
         Package a JRXML template into a ZIP package.
@@ -150,6 +152,7 @@ class JRXMLPackager:
             output_path: Output ZIP file path (default: <jrxml_name>.zip)
             dry_run: If True, don't create ZIP, just analyze dependencies
             fonts: Optional list of FontSpec objects to include in the package
+            fonts_xml_path: Optional path to existing fonts.xml file to include
             
         Returns:
             PackageResult with details about the packaging operation
@@ -265,7 +268,7 @@ class JRXMLPackager:
         
         # Create ZIP archive
         try:
-            self._create_zip(jrxml_path, assets_to_include, output_path, fonts)
+            self._create_zip(jrxml_path, assets_to_include, output_path, fonts, fonts_xml_path)
             result.success = True
         except Exception as e:
             result.errors.append(f"Failed to create ZIP: {e}")
@@ -478,7 +481,8 @@ class JRXMLPackager:
         jrxml_path: Path,
         assets: List[Tuple[Path, str]],
         output_path: Path,
-        fonts: Optional[List[FontSpec]] = None
+        fonts: Optional[List[FontSpec]] = None,
+        fonts_xml_path: Optional[Path] = None
     ) -> None:
         """
         Create a ZIP archive with the JRXML and its assets.
@@ -486,7 +490,8 @@ class JRXMLPackager:
         The ZIP structure preserves the relative paths of assets
         as they appear in the JRXML file. If fonts are provided,
         creates a fonts.xml configuration and includes font files
-        in a fonts/ directory.
+        in a fonts/ directory. Alternatively, an existing fonts.xml
+        file can be included directly.
         """
         fonts = fonts or []
         
@@ -503,8 +508,23 @@ class JRXMLPackager:
                 zf.write(abs_path, archive_path)
                 logger.debug(f"Added: {archive_path}")
             
-            # Add fonts if provided
-            if fonts:
+            # Add existing fonts.xml if provided, along with referenced font files
+            if fonts_xml_path and fonts_xml_path.exists():
+                zf.write(fonts_xml_path, 'fonts.xml')
+                logger.debug("Added: fonts.xml (from existing file)")
+                
+                # Parse fonts.xml and add referenced font files
+                font_files = self._parse_fonts_xml(fonts_xml_path)
+                added_font_files: set = set()
+                for archive_path, abs_path in font_files:
+                    if abs_path.exists() and abs_path not in added_font_files:
+                        zf.write(abs_path, archive_path)
+                        logger.debug(f"Added: {archive_path}")
+                        added_font_files.add(abs_path)
+                    elif not abs_path.exists():
+                        logger.warning(f"Font file not found: {abs_path}")
+            # Or generate fonts.xml if font specs are provided
+            elif fonts:
                 # Generate fonts.xml content
                 fonts_xml = self._generate_fonts_xml(fonts)
                 zf.writestr('fonts.xml', fonts_xml)
@@ -520,6 +540,41 @@ class JRXMLPackager:
                         added_font_files.add(font.file_path)
         
         logger.info(f"Created ZIP: {output_path}")
+    
+    def _parse_fonts_xml(self, fonts_xml_path: Path) -> List[Tuple[str, Path]]:
+        """
+        Parse an existing fonts.xml file and extract font file paths.
+        
+        Returns:
+            List of (archive_path, absolute_path) tuples for font files.
+            The archive_path is taken from the XML, and absolute_path is
+            resolved relative to the fonts.xml file location.
+        """
+        font_files: List[Tuple[str, Path]] = []
+        fonts_xml_dir = fonts_xml_path.parent
+        
+        try:
+            tree = ET.parse(fonts_xml_path)
+            root = tree.getroot()
+            
+            # Font face tags that contain font file paths
+            face_tags = {'normal', 'bold', 'italic', 'boldItalic'}
+            
+            for font_family in root.findall('.//fontFamily'):
+                for face_tag in face_tags:
+                    face_elem = font_family.find(face_tag)
+                    if face_elem is not None and face_elem.text:
+                        archive_path = face_elem.text.strip()
+                        # Resolve absolute path relative to fonts.xml location
+                        abs_path = (fonts_xml_dir / archive_path).resolve()
+                        font_files.append((archive_path, abs_path))
+                        
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse fonts.xml: {e}")
+        except Exception as e:
+            logger.error(f"Error reading fonts.xml: {e}")
+            
+        return font_files
     
     def _generate_fonts_xml(self, fonts: List[FontSpec]) -> str:
         """

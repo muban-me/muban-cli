@@ -256,6 +256,9 @@ muban package template.jrxml \
   --font-file arial.ttf --font-name "Arial Custom" --font-face normal --embedded \
   --font-file times.ttf --font-name "Times Custom" --font-face normal --no-embedded
 
+# Use existing fonts.xml file instead of building font list
+muban package template.jrxml --fonts-xml path/to/fonts.xml
+
 # Package and upload in one step
 muban package template.jrxml --upload
 
@@ -267,7 +270,7 @@ muban package template.jrxml --upload --name "My Report" --author "John Doe"
 
 - **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports
 - **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` files to include their dependencies
-- **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` for JasperReports
+- **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
 - **URL Skipping** - Automatically skips remote resources (http://, https://, etc.)

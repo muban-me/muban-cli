@@ -79,6 +79,11 @@ def validate_font_options(ctx, param, value):
     default=None,
     help='Whether font should be embedded in PDF. Can be repeated.'
 )
+@click.option(
+    '--fonts-xml',
+    type=click.Path(exists=True, path_type=Path),
+    help='Path to existing fonts.xml file to include in package.'
+)
 def package_cmd(
     jrxml_file: Path,
     output: Optional[Path],
@@ -91,7 +96,8 @@ def package_cmd(
     font_file: Tuple[Path, ...],
     font_name: Tuple[str, ...],
     font_face: Tuple[str, ...],
-    font_embedded: Tuple[bool, ...]
+    font_embedded: Tuple[bool, ...],
+    fonts_xml: Optional[Path]
 ):
     """
     Package a JRXML template into a deployable ZIP package.
@@ -174,7 +180,7 @@ def package_cmd(
     
     # Create packager and run
     packager = JRXMLPackager(reports_dir_param=reports_dir_param)
-    result = packager.package(jrxml_file, output, dry_run=dry_run, fonts=fonts)
+    result = packager.package(jrxml_file, output, dry_run=dry_run, fonts=fonts, fonts_xml_path=fonts_xml)
     
     # Display results
     _display_result(result, verbose, dry_run, fonts)
