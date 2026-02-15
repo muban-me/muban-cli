@@ -172,3 +172,32 @@ def create_logout_icon(size: int = 16) -> QIcon:
     painter.end()
     
     return QIcon(pixmap)
+
+
+def create_login_icon(size: int = 16) -> QIcon:
+    """Create a login/lock icon using palette text color."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    
+    color = get_text_color()
+    pen = QPen(color)
+    pen.setWidth(2)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    
+    margin = size // 5
+    # Draw lock body (rectangle)
+    body_top = size // 2
+    painter.drawRect(margin, body_top, size - 2 * margin, size - body_top - margin)
+    
+    # Draw lock shackle (arc)
+    shackle_width = size - 4 * margin
+    shackle_left = 2 * margin
+    painter.drawArc(shackle_left, margin, shackle_width, size // 2, 0, 180 * 16)
+    
+    painter.end()
+    
+    return QIcon(pixmap)

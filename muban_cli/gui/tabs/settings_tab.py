@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
-from muban_cli.gui.icons import create_logout_icon
+from muban_cli.gui.icons import create_logout_icon, create_login_icon
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,8 @@ class SettingsTab(QWidget):
         auth_layout.addRow("Password:", self.password_input)
 
         login_btn_layout = QHBoxLayout()
-        self.login_btn = QPushButton("🔐 Login")
+        self.login_btn = QPushButton("Login")
+        self.login_btn.setIcon(create_login_icon())
         self.login_btn.clicked.connect(self._login)
         login_btn_layout.addWidget(self.login_btn)
         login_btn_layout.addStretch()
@@ -151,7 +152,8 @@ class SettingsTab(QWidget):
         oauth_layout.addRow("Client Secret:", self.client_secret_input)
 
         client_btn_layout = QHBoxLayout()
-        self.client_login_btn = QPushButton("🔐 Login with Client Credentials")
+        self.client_login_btn = QPushButton("Login with Client Credentials")
+        self.client_login_btn.setIcon(create_login_icon())
         self.client_login_btn.clicked.connect(self._login_client_credentials)
         client_btn_layout.addWidget(self.client_login_btn)
         client_btn_layout.addStretch()
