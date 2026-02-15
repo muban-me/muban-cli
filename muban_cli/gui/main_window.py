@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QStatusBar,
     QMessageBox,
+    QStyle,
 )
 
 from muban_cli import __version__, __prog_name__
@@ -64,12 +65,27 @@ class MubanMainWindow(QMainWindow):
         self.server_info_tab = ServerInfoTab()
         self.settings_tab = SettingsTab()
 
-        # Add tabs
-        self.tabs.addTab(self.package_tab, "📦 Package")
-        self.tabs.addTab(self.templates_tab, "📄 Templates")
-        self.tabs.addTab(self.generate_tab, "⚙️ Generate")
-        self.tabs.addTab(self.server_info_tab, "🖥️ Server Info")
-        self.tabs.addTab(self.settings_tab, "⚙️ Settings")
+        # Get standard icons (cross-platform)
+        style = self.style()
+        if style:
+            package_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder)
+            templates_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView)
+            generate_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+            server_icon = style.standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon)
+            settings_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)
+            
+            self.tabs.addTab(self.package_tab, package_icon, "Package")
+            self.tabs.addTab(self.templates_tab, templates_icon, "Templates")
+            self.tabs.addTab(self.generate_tab, generate_icon, "Generate")
+            self.tabs.addTab(self.server_info_tab, server_icon, "Server Info")
+            self.tabs.addTab(self.settings_tab, settings_icon, "Settings")
+        else:
+            # Fallback without icons
+            self.tabs.addTab(self.package_tab, "Package")
+            self.tabs.addTab(self.templates_tab, "Templates")
+            self.tabs.addTab(self.generate_tab, "Generate")
+            self.tabs.addTab(self.server_info_tab, "Server Info")
+            self.tabs.addTab(self.settings_tab, "Settings")
 
         self.setCentralWidget(self.tabs)
 
