@@ -370,3 +370,125 @@ class TestCommandSignatures:
                     errors.append(f"Command '{cmd_name}' uses @common_options but missing 'truncate_length' parameter")
         
         assert not errors, "Signature mismatches found:\n" + "\n".join(errors)
+
+
+class TestPackageCommand:
+    """Test the package command."""
+    
+    def test_package_help(self, runner):
+        """Test package command help output."""
+        result = runner.invoke(cli, ['package', '--help'])
+        assert result.exit_code == 0
+        assert 'jrxml' in result.output.lower()
+        assert '--fonts-xml' in result.output
+        assert '--font-file' in result.output
+        assert '--dry-run' in result.output
+    
+    def test_package_requires_jrxml_file(self, runner):
+        """Test package command requires a JRXML file argument."""
+        result = runner.invoke(cli, ['package'])
+        assert result.exit_code != 0
+        assert 'missing argument' in result.output.lower() or 'required' in result.output.lower()
+    
+    def test_package_with_fonts_xml_option(self, runner, tmp_path):
+        """Test package command passes fonts_xml_path to packager."""
+        # Create test JRXML file
+        jrxml_file = tmp_path / "test.jrxml"
+        jrxml_file.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports">
+    <detail><band height="100"></band></detail>
+</jasperReport>''')
+        
+        # Create test fonts.xml file
+        fonts_xml = tmp_path / "fonts.xml"
+        fonts_xml.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="TestFont">
+        <normal>fonts/TestFont.ttf</normal>
+    </fontFamily>
+</fontFamilies>''')
+        
+        # Create fonts directory and dummy font file
+        (tmp_path / "fonts").mkdir()
+        (tmp_path / "fonts" / "TestFont.ttf").write_bytes(b"fake font data")
+        
+        # Create actual output zip file so output_zip.exists() returns True
+        output_zip = tmp_path / "test.zip"
+        output_zip.write_bytes(b"fake zip data")
+        
+        with patch('muban_cli.commands.package.JRXMLPackager') as mock_packager_class:
+            mock_packager = MagicMock()
+            mock_result = MagicMock()
+            mock_result.jrxml_file = jrxml_file
+            mock_result.output_zip = output_zip
+            mock_result.images = []
+            mock_result.subreports = []
+            mock_result.total_size = 1024
+            mock_result.fonts_xml_files = [tmp_path / "fonts" / "TestFont.ttf"]
+            mock_result.package_size = 2048
+            mock_packager.package.return_value = mock_result
+            mock_packager_class.return_value = mock_packager
+            
+            result = runner.invoke(cli, [
+                'package', str(jrxml_file),
+                '--fonts-xml', str(fonts_xml)
+            ])
+            
+            # Verify packager was called with fonts_xml_path
+            mock_packager.package.assert_called_once()
+            call_kwargs = mock_packager.package.call_args
+            assert call_kwargs.kwargs.get('fonts_xml_path') == fonts_xml
+    
+    def test_package_dry_run(self, runner, tmp_path):
+        """Test package command with --dry-run flag."""
+        # Create test JRXML file
+        jrxml_file = tmp_path / "test.jrxml"
+        jrxml_file.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports">
+    <detail><band height="100"></band></detail>
+</jasperReport>''')
+        
+        with patch('muban_cli.commands.package.JRXMLPackager') as mock_packager_class:
+            mock_packager = MagicMock()
+            mock_result = MagicMock()
+            mock_result.jrxml_file = jrxml_file
+            mock_result.output_zip = None  # dry-run doesn't create ZIP
+            mock_result.images = []
+            mock_result.subreports = []
+            mock_result.fonts = []
+            mock_result.fonts_xml_files = []
+            mock_result.total_size = 1024
+            mock_result.package_size = 0
+            mock_packager.package.return_value = mock_result
+            mock_packager_class.return_value = mock_packager
+            
+            result = runner.invoke(cli, [
+                'package', str(jrxml_file), '--dry-run'
+            ])
+            
+            # Verify packager was called with dry_run=True
+            mock_packager.package.assert_called_once()
+            call_kwargs = mock_packager.package.call_args
+            assert call_kwargs.kwargs.get('dry_run') is True
+    
+    def test_package_nonexistent_jrxml(self, runner, tmp_path):
+        """Test package command with nonexistent JRXML file."""
+        result = runner.invoke(cli, ['package', str(tmp_path / "nonexistent.jrxml")])
+        assert result.exit_code != 0
+        assert 'does not exist' in result.output.lower() or 'not found' in result.output.lower() or 'no such file' in result.output.lower()
+    
+    def test_package_nonexistent_fonts_xml(self, runner, tmp_path):
+        """Test package command with nonexistent fonts.xml file."""
+        # Create test JRXML file
+        jrxml_file = tmp_path / "test.jrxml"
+        jrxml_file.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports">
+    <detail><band height="100"></band></detail>
+</jasperReport>''')
+        
+        result = runner.invoke(cli, [
+            'package', str(jrxml_file),
+            '--fonts-xml', str(tmp_path / "nonexistent-fonts.xml")
+        ])
+        assert result.exit_code != 0
+        assert 'does not exist' in result.output.lower() or 'not found' in result.output.lower() or 'no such file' in result.output.lower()

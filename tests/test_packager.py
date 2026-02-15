@@ -656,3 +656,226 @@ class TestCustomReportsDirParam:
         # Only TEMPLATE_PATH asset should be found
         assert len(assets) == 1
         assert assets[0].path == "img/logo.png"
+
+
+class TestParseFontsXml:
+    """Test _parse_fonts_xml method for extracting font paths from fonts.xml."""
+    
+    def test_parse_valid_fonts_xml(self, temp_dir, packager):
+        """Test parsing a valid fonts.xml with multiple font families."""
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Open Sans">
+        <normal>fonts/OpenSans-Regular.ttf</normal>
+        <bold>fonts/OpenSans-Bold.ttf</bold>
+        <italic>fonts/OpenSans-Italic.ttf</italic>
+        <boldItalic>fonts/OpenSans-BoldItalic.ttf</boldItalic>
+        <pdfEncoding>Identity-H</pdfEncoding>
+        <pdfEmbedded>true</pdfEmbedded>
+    </fontFamily>
+    <fontFamily name="Roboto">
+        <normal>fonts/Roboto-Regular.ttf</normal>
+        <bold>fonts/Roboto-Bold.ttf</bold>
+        <pdfEncoding>Identity-H</pdfEncoding>
+        <pdfEmbedded>true</pdfEmbedded>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        font_files = packager._parse_fonts_xml(fonts_xml_path)
+        
+        # Should find 6 font files (4 from Open Sans + 2 from Roboto)
+        assert len(font_files) == 6
+        
+        # Check archive paths are preserved
+        archive_paths = [f[0] for f in font_files]
+        assert "fonts/OpenSans-Regular.ttf" in archive_paths
+        assert "fonts/OpenSans-Bold.ttf" in archive_paths
+        assert "fonts/Roboto-Regular.ttf" in archive_paths
+        
+    def test_parse_empty_fonts_xml(self, temp_dir, packager):
+        """Test parsing an empty fonts.xml."""
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        font_files = packager._parse_fonts_xml(fonts_xml_path)
+        
+        assert len(font_files) == 0
+        
+    def test_parse_fonts_xml_with_partial_faces(self, temp_dir, packager):
+        """Test parsing fonts.xml where font family has only some face types."""
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Simple Font">
+        <normal>fonts/Simple.ttf</normal>
+        <pdfEncoding>Identity-H</pdfEncoding>
+        <pdfEmbedded>true</pdfEmbedded>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        font_files = packager._parse_fonts_xml(fonts_xml_path)
+        
+        # Should find only 1 font file (normal only)
+        assert len(font_files) == 1
+        assert font_files[0][0] == "fonts/Simple.ttf"
+        
+    def test_parse_invalid_fonts_xml(self, temp_dir, packager):
+        """Test parsing invalid XML returns empty list."""
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text("not valid xml <><>", encoding='utf-8')
+        
+        font_files = packager._parse_fonts_xml(fonts_xml_path)
+        
+        # Should return empty list on parse error
+        assert len(font_files) == 0
+        
+    def test_parse_fonts_xml_resolves_paths_relative_to_xml(self, temp_dir, packager):
+        """Test that font paths are resolved relative to fonts.xml location."""
+        subdir = temp_dir / "config"
+        subdir.mkdir()
+        
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Test">
+        <normal>../fonts/Test.ttf</normal>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = subdir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        font_files = packager._parse_fonts_xml(fonts_xml_path)
+        
+        assert len(font_files) == 1
+        archive_path, abs_path = font_files[0]
+        assert archive_path == "../fonts/Test.ttf"
+        # Absolute path should be resolved relative to config/ directory
+        assert abs_path == (temp_dir / "fonts" / "Test.ttf").resolve()
+
+
+class TestPackageWithFontsXml:
+    """Test package() method with fonts_xml_path parameter."""
+    
+    def test_package_with_fonts_xml_includes_fonts(self, temp_dir, packager, sample_jrxml_content):
+        """Test that packaging with fonts.xml includes referenced font files."""
+        # Create JRXML
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        # Create required assets
+        (temp_dir / "assets" / "img").mkdir(parents=True)
+        (temp_dir / "assets" / "img" / "logo.png").write_bytes(b"PNG")
+        (temp_dir / "assets" / "img" / "banner.jpg").write_bytes(b"JPG")
+        
+        # Create fonts directory and font files
+        fonts_dir = temp_dir / "fonts"
+        fonts_dir.mkdir()
+        (fonts_dir / "Regular.ttf").write_bytes(b"TTF-regular")
+        (fonts_dir / "Bold.ttf").write_bytes(b"TTF-bold")
+        
+        # Create fonts.xml
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Test Font">
+        <normal>fonts/Regular.ttf</normal>
+        <bold>fonts/Bold.ttf</bold>
+        <pdfEncoding>Identity-H</pdfEncoding>
+        <pdfEmbedded>true</pdfEmbedded>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        # Package with fonts.xml
+        output_path = temp_dir / "output.zip"
+        result = packager.package(jrxml_path, output_path, fonts_xml_path=fonts_xml_path)
+        
+        assert result.success
+        assert output_path.exists()
+        
+        # Verify ZIP contents include fonts
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "fonts.xml" in names
+            assert "fonts/Regular.ttf" in names
+            assert "fonts/Bold.ttf" in names
+            
+    def test_package_fonts_xml_sets_fonts_xml_files_in_result(self, temp_dir, packager, sample_jrxml_content):
+        """Test that fonts_xml_files is populated in result when using fonts.xml."""
+        # Create JRXML
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        # Create required assets
+        (temp_dir / "assets" / "img").mkdir(parents=True)
+        (temp_dir / "assets" / "img" / "logo.png").write_bytes(b"PNG")
+        (temp_dir / "assets" / "img" / "banner.jpg").write_bytes(b"JPG")
+        
+        # Create font files
+        fonts_dir = temp_dir / "fonts"
+        fonts_dir.mkdir()
+        (fonts_dir / "Test.ttf").write_bytes(b"TTF")
+        
+        # Create fonts.xml
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Test">
+        <normal>fonts/Test.ttf</normal>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        # Package (dry run to check result)
+        result = packager.package(jrxml_path, dry_run=True, fonts_xml_path=fonts_xml_path)
+        
+        assert result.success
+        assert len(result.fonts_xml_files) == 1
+        assert result.fonts_xml_files[0] == (fonts_dir / "Test.ttf").resolve()
+        # fonts_included should be empty when using fonts_xml_path
+        assert len(result.fonts_included) == 0
+        
+    def test_package_fonts_xml_missing_font_files_still_succeeds(self, temp_dir, packager, sample_jrxml_content):
+        """Test that packaging succeeds even if fonts.xml references missing fonts."""
+        # Create JRXML
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        # Create required assets
+        (temp_dir / "assets" / "img").mkdir(parents=True)
+        (temp_dir / "assets" / "img" / "logo.png").write_bytes(b"PNG")
+        (temp_dir / "assets" / "img" / "banner.jpg").write_bytes(b"JPG")
+        
+        # Create fonts.xml referencing non-existent fonts
+        fonts_xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Missing">
+        <normal>fonts/NonExistent.ttf</normal>
+    </fontFamily>
+</fontFamilies>
+'''
+        fonts_xml_path = temp_dir / "fonts.xml"
+        fonts_xml_path.write_text(fonts_xml_content, encoding='utf-8')
+        
+        # Package should still succeed (with warning logged)
+        output_path = temp_dir / "output.zip"
+        result = packager.package(jrxml_path, output_path, fonts_xml_path=fonts_xml_path)
+        
+        assert result.success
+        
+        # ZIP should have fonts.xml but not the missing font file
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "fonts.xml" in names
+            assert "fonts/NonExistent.ttf" not in names

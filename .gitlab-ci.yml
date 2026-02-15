@@ -19,12 +19,17 @@ test:
   tags:
     - docker
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+        libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1
+        libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0
+        libxcb-xinerama0 libxcb-xkb1 libxkbcommon0 libxkbcommon-x11-0
+        libegl1 libgl1 libglib2.0-0 libdbus-1-3 libfontconfig1 xvfb xauth
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e ".[dev]"
+    - pip install -e ".[dev,gui]"
   script:
-    - pytest tests/ -v --tb=short --junitxml=report.xml
+    - xvfb-run -a pytest tests/ -v --tb=short --junitxml=report.xml
   artifacts:
     when: always
     reports:
@@ -42,12 +47,17 @@ test:coverage:
   tags:
     - docker
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+        libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1
+        libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0
+        libxcb-xinerama0 libxcb-xkb1 libxkbcommon0 libxkbcommon-x11-0
+        libegl1 libgl1 libglib2.0-0 libdbus-1-3 libfontconfig1 xvfb xauth
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e ".[dev]"
+    - pip install -e ".[dev,gui]"
   script:
-    - pytest tests/ -v --cov=muban_cli --cov-report=xml --cov-report=term-missing
+    - xvfb-run -a pytest tests/ -v --cov=muban_cli --cov-report=xml --cov-report=term-missing
   coverage: '/TOTAL.*\s+(\d+%)/'
   artifacts:
     when: always
@@ -66,12 +76,17 @@ test:coverage:
   tags:
     - docker
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+        libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1
+        libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0
+        libxcb-xinerama0 libxcb-xkb1 libxkbcommon0 libxkbcommon-x11-0
+        libegl1 libgl1 libglib2.0-0 libdbus-1-3 libfontconfig1 xvfb xauth
     - python -m venv .venv
     - source .venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e ".[dev]"
+    - pip install -e ".[dev,gui]"
   script:
-    - pytest tests/ -v --tb=short
+    - xvfb-run -a pytest tests/ -v --tb=short
 
 test:py39:
   extends: .test-matrix
