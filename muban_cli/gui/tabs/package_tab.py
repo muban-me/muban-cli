@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QSplitter,
+    QLabel,
 )
 
 from muban_cli.packager import JRXMLPackager, PackageResult, FontSpec
@@ -47,6 +48,7 @@ class PackageWorker(QThread):
         fonts: List[FontSpec],
         reports_dir_param: str,
         dry_run: bool = False,
+        fonts_xml_path: Optional[Path] = None,
     ):
         super().__init__()
         self.jrxml_path = jrxml_path
@@ -54,6 +56,7 @@ class PackageWorker(QThread):
         self.fonts = fonts
         self.reports_dir_param = reports_dir_param
         self.dry_run = dry_run
+        self.fonts_xml_path = fonts_xml_path
 
     def run(self):
         try:
@@ -63,6 +66,7 @@ class PackageWorker(QThread):
                 self.output_path,
                 dry_run=self.dry_run,
                 fonts=self.fonts,
+                fonts_xml_path=self.fonts_xml_path,
             )
             self.finished.emit(result)
         except Exception as e:
@@ -150,6 +154,27 @@ class PackageTab(QWidget):
         # Fonts group
         fonts_group = QGroupBox("Custom Fonts (Optional)")
         fonts_layout = QVBoxLayout(fonts_group)
+
+        # Existing fonts.xml option
+        fonts_xml_layout = QHBoxLayout()
+        fonts_xml_layout.addWidget(QLabel("Existing fonts.xml:"))
+        self.fonts_xml_input = QLineEdit()
+        self.fonts_xml_input.setPlaceholderText("Or use an existing fonts.xml file...")
+        fonts_xml_layout.addWidget(self.fonts_xml_input)
+        self.fonts_xml_browse_btn = QPushButton("Browse...")
+        self.fonts_xml_browse_btn.clicked.connect(self._browse_fonts_xml)
+        fonts_xml_layout.addWidget(self.fonts_xml_browse_btn)
+        self.fonts_xml_clear_btn = QPushButton("Clear")
+        self.fonts_xml_clear_btn.clicked.connect(self._clear_fonts_xml)
+        fonts_xml_layout.addWidget(self.fonts_xml_clear_btn)
+        self.fonts_xml_input.textChanged.connect(self._on_fonts_xml_changed)
+        fonts_layout.addLayout(fonts_xml_layout)
+
+        # Separator label
+        or_label = QLabel("— OR add individual font files below —")
+        or_label.setStyleSheet("color: gray; font-style: italic;")
+        or_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        fonts_layout.addWidget(or_label)
 
         # Font table
         self.fonts_table = QTableWidget(0, 4)
@@ -260,6 +285,28 @@ class PackageTab(QWidget):
             self._fonts.append(font_spec)
             self._refresh_fonts_table()
 
+    def _browse_fonts_xml(self):
+        """Browse for existing fonts.xml file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select fonts.xml File",
+            "",
+            "XML Files (*.xml);;All Files (*)",
+        )
+        if file_path:
+            self.fonts_xml_input.setText(file_path)
+
+    def _clear_fonts_xml(self):
+        """Clear the fonts.xml path."""
+        self.fonts_xml_input.clear()
+
+    def _on_fonts_xml_changed(self, text: str):
+        """Enable/disable manual font controls based on fonts.xml input."""
+        has_fonts_xml = bool(text.strip())
+        self.fonts_table.setEnabled(not has_fonts_xml)
+        self.add_font_btn.setEnabled(not has_fonts_xml)
+        self.remove_font_btn.setEnabled(not has_fonts_xml)
+
     def _remove_font(self):
         """Remove selected font."""
         rows = set(item.row() for item in self.fonts_table.selectedItems())
@@ -301,6 +348,13 @@ class PackageTab(QWidget):
         output_path = Path(output_path) if output_path else None
 
         dry_run = self.dry_run_cb.isChecked()
+        
+        # Get fonts.xml path if specified
+        fonts_xml_text = self.fonts_xml_input.text().strip()
+        fonts_xml_path = Path(fonts_xml_text) if fonts_xml_text else None
+        if fonts_xml_path and not fonts_xml_path.exists():
+            QMessageBox.warning(self, "Error", f"fonts.xml not found: {fonts_xml_path}")
+            return
 
         # Disable UI during operation
         self._set_ui_enabled(False)
@@ -316,6 +370,7 @@ class PackageTab(QWidget):
             self._fonts.copy(),
             self.reports_dir_input.text(),
             dry_run,
+            fonts_xml_path,
         )
         self.worker.finished.connect(self._on_package_finished)
         self.worker.error.connect(self._on_package_error)
@@ -337,6 +392,8 @@ class PackageTab(QWidget):
                 if result.fonts_included:
                     unique_font_files = len({f.file_path for f in result.fonts_included})
                     self._log(f"  Fonts: {unique_font_files} file(s)")
+                elif result.fonts_xml_files:
+                    self._log(f"  Fonts: {len(result.fonts_xml_files)} file(s) from fonts.xml")
                 if not is_dry_run and result.output_path and result.output_path.exists():
                     size_kb = result.output_path.stat().st_size / 1024
                     self._log(f"  Size: {size_kb:.1f} KB")
@@ -440,9 +497,14 @@ class PackageTab(QWidget):
         self.output_input.setEnabled(enabled)
         self.output_browse_btn.setEnabled(enabled)
         self.reports_dir_input.setEnabled(enabled)
-        self.fonts_table.setEnabled(enabled)
-        self.add_font_btn.setEnabled(enabled)
-        self.remove_font_btn.setEnabled(enabled)
+        self.fonts_xml_input.setEnabled(enabled)
+        self.fonts_xml_browse_btn.setEnabled(enabled)
+        self.fonts_xml_clear_btn.setEnabled(enabled)
+        # Font controls respect fonts.xml state when re-enabling
+        has_fonts_xml = bool(self.fonts_xml_input.text().strip())
+        self.fonts_table.setEnabled(enabled and not has_fonts_xml)
+        self.add_font_btn.setEnabled(enabled and not has_fonts_xml)
+        self.remove_font_btn.setEnabled(enabled and not has_fonts_xml)
         self.dry_run_cb.setEnabled(enabled)
         self.package_btn.setEnabled(enabled)
 
