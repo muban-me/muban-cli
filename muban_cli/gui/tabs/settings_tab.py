@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
+from muban_cli.gui.icons import create_logout_icon
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ class SettingsTab(QWidget):
         style = self.style()
         if style:
             self.refresh_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
-            self.logout_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton))
+        self.logout_btn.setIcon(create_logout_icon())
 
         status_btn_layout.addStretch()
         status_layout.addLayout(status_btn_layout)

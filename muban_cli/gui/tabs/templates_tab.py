@@ -29,6 +29,13 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+from muban_cli.gui.icons import (
+    create_play_icon,
+    create_arrow_up_icon,
+    create_arrow_down_icon,
+    create_arrow_left_icon,
+    create_arrow_right_icon,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -292,11 +299,9 @@ class TemplatesTab(QWidget):
         pagination_layout.addWidget(self.next_btn)
         layout.addLayout(pagination_layout)
         
-        # Apply pagination icons
-        style = self.style()
-        if style:
-            self.prev_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
-            self.next_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
+        # Apply pagination icons (custom palette-aware)
+        self.prev_btn.setIcon(create_arrow_left_icon())
+        self.next_btn.setIcon(create_arrow_right_icon())
 
         # Actions
         actions_group = QGroupBox("Actions")
@@ -320,13 +325,13 @@ class TemplatesTab(QWidget):
         self.generate_btn.clicked.connect(self._generate_from_template)
         actions_layout.addWidget(self.generate_btn)
         
-        # Apply icons
+        # Apply icons (custom palette-aware for arrows/play, standard for others)
+        self.upload_btn.setIcon(create_arrow_up_icon())
+        self.download_btn.setIcon(create_arrow_down_icon())
         style = self.style()
         if style:
-            self.upload_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
-            self.download_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowDown))
             self.delete_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
-            self.generate_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.generate_btn.setIcon(create_play_icon())
 
         layout.addWidget(actions_group)
 

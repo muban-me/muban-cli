@@ -17,6 +17,7 @@ from muban_cli.gui.tabs.templates_tab import TemplatesTab
 from muban_cli.gui.tabs.generate_tab import GenerateTab
 from muban_cli.gui.tabs.settings_tab import SettingsTab
 from muban_cli.gui.tabs.server_info_tab import ServerInfoTab
+from muban_cli.gui.icons import create_play_icon
 
 
 class MubanMainWindow(QMainWindow):
@@ -70,7 +71,7 @@ class MubanMainWindow(QMainWindow):
         if style:
             package_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder)
             templates_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView)
-            generate_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+            generate_icon = create_play_icon()  # Custom palette-aware icon
             server_icon = style.standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon)
             settings_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)
             
