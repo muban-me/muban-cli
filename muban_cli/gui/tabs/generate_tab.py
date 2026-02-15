@@ -27,10 +27,12 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QSplitter,
     QSizePolicy,
+    QStyle,
 )
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+from muban_cli.gui.icons import create_play_icon
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +333,7 @@ class GenerateTab(QWidget):
 
         # Export options button
         export_layout = QHBoxLayout()
-        self.export_options_btn = QPushButton("⚙️ Export Options...")
+        self.export_options_btn = QPushButton("Export Options...")
         self.export_options_btn.setToolTip("Configure PDF/HTML export options")
         self.export_options_btn.clicked.connect(self._open_export_options_dialog)
         export_layout.addWidget(self.export_options_btn)
@@ -347,11 +349,17 @@ class GenerateTab(QWidget):
         # Generate button
         action_layout = QHBoxLayout()
         action_layout.addStretch()
-        self.generate_btn = QPushButton("⚙️ Generate Document")
+        self.generate_btn = QPushButton("Generate Document")
         self.generate_btn.setMinimumWidth(150)
         self.generate_btn.clicked.connect(self._generate)
         action_layout.addWidget(self.generate_btn)
         top_layout.addLayout(action_layout)
+        
+        # Apply icons
+        style = self.style()
+        if style:
+            self.export_options_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
+        self.generate_btn.setIcon(create_play_icon())
 
         # Progress
         self.progress = QProgressBar()

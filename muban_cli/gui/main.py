@@ -25,6 +25,7 @@ def main():
     from muban_cli.gui.main_window import MubanMainWindow
 
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")  # Disabled for comparison - cross-platform style
     app.setApplicationName("Muban")
     app.setOrganizationName("Muban")
     app.setOrganizationDomain("muban.me")

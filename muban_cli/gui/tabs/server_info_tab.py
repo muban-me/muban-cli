@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QListWidget,
     QListWidgetItem,
+    QStyle,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -109,8 +110,11 @@ class ServerInfoTab(QWidget):
 
         # Refresh button at top
         refresh_layout = QHBoxLayout()
-        self.refresh_btn = QPushButton("🔄 Refresh Server Info")
+        self.refresh_btn = QPushButton("Refresh Server Info")
         self.refresh_btn.clicked.connect(self._load_all)
+        style = self.style()
+        if style:
+            self.refresh_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         refresh_layout.addWidget(self.refresh_btn)
         refresh_layout.addStretch()
         layout.addLayout(refresh_layout)

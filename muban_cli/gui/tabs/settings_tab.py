@@ -20,10 +20,12 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QMessageBox,
     QProgressBar,
+    QStyle,
 )
 
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
+from muban_cli.gui.icons import create_logout_icon
 
 logger = logging.getLogger(__name__)
 
@@ -169,15 +171,21 @@ class SettingsTab(QWidget):
         status_layout.addWidget(self.token_info_label)
 
         status_btn_layout = QHBoxLayout()
-        self.refresh_btn = QPushButton("🔄 Refresh Token")
+        self.refresh_btn = QPushButton("Refresh Token")
         self.refresh_btn.clicked.connect(self._refresh_token)
         self.refresh_btn.setEnabled(False)
         status_btn_layout.addWidget(self.refresh_btn)
 
-        self.logout_btn = QPushButton("🚪 Logout")
+        self.logout_btn = QPushButton("Logout")
         self.logout_btn.clicked.connect(self._logout)
         self.logout_btn.setEnabled(False)
         status_btn_layout.addWidget(self.logout_btn)
+        
+        # Apply icons
+        style = self.style()
+        if style:
+            self.refresh_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.logout_btn.setIcon(create_logout_icon())
 
         status_btn_layout.addStretch()
         status_layout.addLayout(status_btn_layout)
@@ -192,15 +200,21 @@ class SettingsTab(QWidget):
         # Action buttons
         action_layout = QHBoxLayout()
         
-        self.clear_btn = QPushButton("🗑️ Clear Configuration")
+        self.clear_btn = QPushButton("Clear Configuration")
         self.clear_btn.clicked.connect(self._clear_config)
         action_layout.addWidget(self.clear_btn)
         
         action_layout.addStretch()
         
-        self.save_btn = QPushButton("💾 Save Configuration")
+        self.save_btn = QPushButton("Save Configuration")
         self.save_btn.clicked.connect(self._save_config)
         action_layout.addWidget(self.save_btn)
+        
+        # Apply icons to action buttons
+        style = self.style()
+        if style:
+            self.clear_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+            self.save_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
         
         layout.addLayout(action_layout)
 

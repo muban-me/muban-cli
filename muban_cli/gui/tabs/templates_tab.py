@@ -24,10 +24,18 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QAbstractItemView,
     QSpinBox,
+    QStyle,
 )
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+from muban_cli.gui.icons import (
+    create_play_icon,
+    create_arrow_up_icon,
+    create_arrow_down_icon,
+    create_arrow_left_icon,
+    create_arrow_right_icon,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +223,11 @@ class TemplatesTab(QWidget):
         self.status_label = QLabel("Not connected")
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
-        self.refresh_btn = QPushButton("🔄 Refresh")
+        self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self._load_templates)
+        style = self.style()
+        if style:
+            self.refresh_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         status_layout.addWidget(self.refresh_btn)
         layout.addLayout(status_layout)
 
@@ -256,7 +267,7 @@ class TemplatesTab(QWidget):
 
         # Pagination
         pagination_layout = QHBoxLayout()
-        self.prev_btn = QPushButton("◀ Previous")
+        self.prev_btn = QPushButton("Previous")
         self.prev_btn.clicked.connect(self._prev_page)
         self.prev_btn.setEnabled(False)
         pagination_layout.addWidget(self.prev_btn)
@@ -282,33 +293,45 @@ class TemplatesTab(QWidget):
         
         pagination_layout.addStretch()
         
-        self.next_btn = QPushButton("Next ▶")
+        self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(self._next_page)
         self.next_btn.setEnabled(False)
         pagination_layout.addWidget(self.next_btn)
         layout.addLayout(pagination_layout)
+        
+        # Apply pagination icons (custom palette-aware)
+        self.prev_btn.setIcon(create_arrow_left_icon())
+        self.next_btn.setIcon(create_arrow_right_icon())
 
         # Actions
         actions_group = QGroupBox("Actions")
         actions_layout = QHBoxLayout(actions_group)
 
-        self.upload_btn = QPushButton("📤 Upload Template...")
+        self.upload_btn = QPushButton("Upload Template...")
         self.upload_btn.clicked.connect(self._upload_template)
         actions_layout.addWidget(self.upload_btn)
 
-        self.download_btn = QPushButton("📥 Download")
+        self.download_btn = QPushButton("Download")
         self.download_btn.clicked.connect(self._download_template)
         actions_layout.addWidget(self.download_btn)
 
-        self.delete_btn = QPushButton("🗑️ Delete")
+        self.delete_btn = QPushButton("Delete")
         self.delete_btn.clicked.connect(self._delete_template)
         actions_layout.addWidget(self.delete_btn)
 
         actions_layout.addStretch()
 
-        self.generate_btn = QPushButton("⚙️ Generate Document...")
+        self.generate_btn = QPushButton("Generate Document...")
         self.generate_btn.clicked.connect(self._generate_from_template)
         actions_layout.addWidget(self.generate_btn)
+        
+        # Apply icons (custom palette-aware for arrows/play, standard for others)
+        self.upload_btn.setIcon(create_arrow_up_icon())
+        self.download_btn.setIcon(create_arrow_down_icon())
+        style = self.style()
+        if style:
+            self.delete_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        self.generate_btn.setIcon(create_play_icon())
 
         layout.addWidget(actions_group)
 

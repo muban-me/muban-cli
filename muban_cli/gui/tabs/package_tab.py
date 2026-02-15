@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QSplitter,
     QLabel,
+    QStyle,
 )
 
 from muban_cli.packager import JRXMLPackager, PackageResult, FontSpec
@@ -211,9 +212,12 @@ class PackageTab(QWidget):
         action_layout.addWidget(self.dry_run_cb)
         action_layout.addStretch()
 
-        self.package_btn = QPushButton("📦 Package Template")
+        self.package_btn = QPushButton("Package Template")
         self.package_btn.setMinimumWidth(150)
         self.package_btn.clicked.connect(self._run_package)
+        style = self.style()
+        if style:
+            self.package_btn.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder))
         action_layout.addWidget(self.package_btn)
 
         top_layout.addLayout(action_layout)
