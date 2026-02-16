@@ -5,7 +5,7 @@ Server Info Tab - Display server resources (fonts, ICC profiles).
 import logging
 from typing import Optional, List, Dict, Any
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -96,6 +96,16 @@ class ServerInfoTab(QWidget):
         self._fonts: List[Dict[str, Any]] = []
         self._icc_profiles: List[str] = []
         self._loaded = False
+        self._fonts_loading = False
+        self._icc_loading = False
+        self._fonts_worker: Optional[FontsWorker] = None
+        self._icc_worker: Optional[ICCProfilesWorker] = None
+        
+        # Timeout timer to prevent indefinite hangs
+        self._timeout_timer = QTimer(self)
+        self._timeout_timer.setSingleShot(True)
+        self._timeout_timer.timeout.connect(self._on_loading_timeout)
+        
         self._setup_ui()
 
     def showEvent(self, event):
@@ -200,26 +210,63 @@ class ServerInfoTab(QWidget):
         if not client:
             return
 
+        # Stop any existing workers
+        self._cleanup_workers()
+
         self._set_ui_enabled(False)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
 
+        # Reset loading flags
+        self._fonts_loading = True
+        self._icc_loading = True
+
+        # Start timeout timer using configured timeout (in seconds, convert to ms)
+        config = get_config_manager().load()
+        timeout_ms = config.timeout * 1000
+        self._timeout_timer.start(timeout_ms)
+
         # Load fonts
-        self.fonts_worker = FontsWorker(client)
-        self.fonts_worker.finished.connect(self._on_fonts_loaded)
-        self.fonts_worker.error.connect(self._on_fonts_error)
-        self.fonts_worker.start()
+        self._fonts_worker = FontsWorker(client)
+        self._fonts_worker.finished.connect(self._on_fonts_loaded)
+        self._fonts_worker.error.connect(self._on_fonts_error)
+        self._fonts_worker.start()
 
         # Load ICC profiles (use separate client)
         client2 = self._get_client()
         if client2:
-            self.icc_worker = ICCProfilesWorker(client2)
-            self.icc_worker.finished.connect(self._on_icc_loaded)
-            self.icc_worker.error.connect(self._on_icc_error)
-            self.icc_worker.start()
+            self._icc_worker = ICCProfilesWorker(client2)
+            self._icc_worker.finished.connect(self._on_icc_loaded)
+            self._icc_worker.error.connect(self._on_icc_error)
+            self._icc_worker.start()
+        else:
+            # Mark ICC loading as done if client creation failed
+            self._icc_loading = False
+            self.icc_count_label.setText("Error: Could not create API client")
+            self._check_loading_complete()
+
+    def _cleanup_workers(self):
+        """Stop and clean up any running workers."""
+        self._timeout_timer.stop()
+        
+        if self._fonts_worker is not None:
+            if self._fonts_worker.isRunning():
+                self._fonts_worker.quit()
+                self._fonts_worker.wait(1000)  # Wait up to 1 second
+            self._fonts_worker = None
+        
+        if self._icc_worker is not None:
+            if self._icc_worker.isRunning():
+                self._icc_worker.quit()
+                self._icc_worker.wait(1000)
+            self._icc_worker = None
+        
+        self._fonts_loading = False
+        self._icc_loading = False
 
     def _on_fonts_loaded(self, fonts: list):
         """Handle loaded fonts."""
+        self._fonts_loading = False
         self._fonts = fonts
         self.fonts_table.setRowCount(len(fonts))
 
@@ -253,11 +300,13 @@ class ServerInfoTab(QWidget):
 
     def _on_fonts_error(self, error: str):
         """Handle fonts loading error."""
+        self._fonts_loading = False
         self.fonts_count_label.setText(f"Error: {error}")
         self._check_loading_complete()
 
     def _on_icc_loaded(self, profiles: list):
         """Handle loaded ICC profiles."""
+        self._icc_loading = False
         self._icc_profiles = profiles
         self.icc_list.clear()
 
@@ -271,16 +320,36 @@ class ServerInfoTab(QWidget):
 
     def _on_icc_error(self, error: str):
         """Handle ICC profiles loading error."""
+        self._icc_loading = False
         self.icc_count_label.setText(f"Error: {error}")
         self._check_loading_complete()
 
+    def _on_loading_timeout(self):
+        """Handle loading timeout - force completion."""
+        logger.warning("Server info loading timed out")
+        
+        if self._fonts_loading:
+            self._fonts_loading = False
+            self.fonts_count_label.setText("Error: Request timed out")
+        
+        if self._icc_loading:
+            self._icc_loading = False
+            self.icc_count_label.setText("Error: Request timed out")
+        
+        self._cleanup_workers()
+        self._set_ui_enabled(True)
+        self.progress.setVisible(False)
+        
+        QMessageBox.warning(
+            self,
+            "Timeout",
+            "Server requests timed out. Please check your connection and try again."
+        )
+
     def _check_loading_complete(self):
         """Check if all loading is complete."""
-        # Simple check - both workers should have finished
-        fonts_done = hasattr(self, 'fonts_worker') and not self.fonts_worker.isRunning()
-        icc_done = hasattr(self, 'icc_worker') and not self.icc_worker.isRunning()
-
-        if fonts_done and icc_done:
+        if not self._fonts_loading and not self._icc_loading:
+            self._timeout_timer.stop()
             self._set_ui_enabled(True)
             self.progress.setVisible(False)
 
