@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
 from muban_cli.gui.icons import create_play_icon
+from muban_cli.gui.error_dialog import show_error_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -850,7 +851,7 @@ class GenerateTab(QWidget):
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
         self._log(f"✗ Error: {error}")
-        QMessageBox.critical(self, "Generation Error", error)
+        show_error_dialog(self, "Generation Error", error)
 
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""

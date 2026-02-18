@@ -740,17 +740,32 @@ Example error output:
 
 The correlation ID can be provided to support teams for in-depth error analysis in server logs.
 
+Correlation IDs are also logged to the application log file for batch operations.
+
+### GUI Error Dialogs
+
+In the graphical interface, API errors are displayed in a custom dialog that:
+
+- Shows the full error message in a scrollable text area
+- **Highlights the correlation ID** for easy identification
+- Provides a **"Copy ID"** button to quickly copy the correlation ID to clipboard
+- Provides a **"Copy All"** button to copy the entire error message
+
+This makes it easy to create support tickets with the relevant debugging information.
+
 ### Retry Behavior
 
 The CLI automatically retries requests on transient network errors:
 
 | Status Code | Behavior |
 | ----------- | -------- |
-| 429 | Rate limited - retries with exponential backoff |
+| 429 | Rate limited - retries honoring `Retry-After` header |
 | 502 | Bad gateway - retries (typically load balancer issue) |
 | 503 | Service unavailable - retries (temporary overload) |
 | 504 | Gateway timeout - retries (may succeed on retry) |
 | 500 | Internal error - **no retry** (application error, needs investigation) |
+
+The retry mechanism respects the `Retry-After` header sent by the server for 429 responses, up to a maximum backoff of 2 minutes.
 
 Configure retry behavior:
 

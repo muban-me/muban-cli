@@ -62,8 +62,10 @@ class MubanAPIClient:
             retry_strategy = Retry(
                 total=self.config.max_retries,
                 backoff_factor=1,
+                backoff_max=120,  # Max backoff of 2 minutes
                 status_forcelist=[429, 502, 503, 504],
                 allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
+                respect_retry_after_header=True,  # Honor Retry-After header from 429 responses
             )
             adapter = HTTPAdapter(max_retries=retry_strategy)
             self._session.mount("http://", adapter)
@@ -130,6 +132,18 @@ class MubanAPIClient:
         try:
             error_data = response.json()
             error_msg = self._extract_error_message(error_data)
+            
+            # Log correlation ID for debugging/support
+            meta = error_data.get("meta", {})
+            correlation_id = meta.get("correlationId") or meta.get("correlation_id")
+            if correlation_id:
+                logger.error(
+                    "API error [%s %s] status=%d correlation_id=%s",
+                    response.request.method,
+                    response.request.url,
+                    response.status_code,
+                    correlation_id
+                )
         except ValueError:
             error_msg = response.text or f"HTTP {response.status_code}"
             error_data = {}

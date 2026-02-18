@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
 from muban_cli.gui.icons import create_logout_icon, create_login_icon
+from muban_cli.gui.error_dialog import show_error_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -395,7 +396,7 @@ class SettingsTab(QWidget):
         """Handle login error."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
-        QMessageBox.critical(self, "Login Failed", error)
+        show_error_dialog(self, "Login Failed", error)
 
     def _login_client_credentials(self):
         """Login with client credentials."""
