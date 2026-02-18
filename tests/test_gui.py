@@ -776,3 +776,67 @@ class TestLineNumberArea:
         
         size = editor.line_number_area.sizeHint()
         assert size.width() > 0
+
+
+class TestErrorDialog:
+    """Tests for the ErrorDialog with copy functionality."""
+
+    def test_error_dialog_creation(self, qtbot):
+        """Test error dialog can be created."""
+        from muban_cli.gui.error_dialog import ErrorDialog
+        
+        dialog = ErrorDialog(None, "Test Error", "Something went wrong")
+        qtbot.addWidget(dialog)
+        
+        assert dialog is not None
+        assert dialog.windowTitle() == "Test Error"
+        assert dialog.message == "Something went wrong"
+        assert dialog.correlation_id is None
+
+    def test_error_dialog_extracts_correlation_id(self, qtbot):
+        """Test error dialog extracts correlation ID from message."""
+        from muban_cli.gui.error_dialog import ErrorDialog
+        
+        message = "[TEMPLATE_FILL_ERROR] Failed to fill template (Correlation ID: abc-123-def)"
+        dialog = ErrorDialog(None, "Generation Error", message)
+        qtbot.addWidget(dialog)
+        
+        assert dialog.correlation_id == "abc-123-def"
+
+    def test_error_dialog_extracts_uuid_correlation_id(self, qtbot):
+        """Test error dialog extracts UUID correlation ID."""
+        from muban_cli.gui.error_dialog import ErrorDialog
+        
+        message = "API error (Correlation ID: 00154aac-eb74-4867-a009-c9762fa0e059)"
+        dialog = ErrorDialog(None, "Error", message)
+        qtbot.addWidget(dialog)
+        
+        assert dialog.correlation_id == "00154aac-eb74-4867-a009-c9762fa0e059"
+
+    def test_error_dialog_no_correlation_id(self, qtbot):
+        """Test error dialog handles messages without correlation ID."""
+        from muban_cli.gui.error_dialog import ErrorDialog
+        
+        dialog = ErrorDialog(None, "Error", "Simple error message")
+        qtbot.addWidget(dialog)
+        
+        assert dialog.correlation_id is None
+
+    def test_error_dialog_warning_style(self, qtbot):
+        """Test error dialog can be created as warning."""
+        from muban_cli.gui.error_dialog import ErrorDialog
+        
+        dialog = ErrorDialog(None, "Warning", "This is a warning", is_critical=False)
+        qtbot.addWidget(dialog)
+        
+        assert dialog is not None
+
+    def test_show_error_dialog_function(self, qtbot, monkeypatch):
+        """Test show_error_dialog helper function."""
+        from muban_cli.gui.error_dialog import show_error_dialog, ErrorDialog
+        
+        # Mock the exec method to avoid blocking
+        monkeypatch.setattr(ErrorDialog, 'exec', lambda self: None)
+        
+        # Should not raise
+        show_error_dialog(None, "Test", "Test message")

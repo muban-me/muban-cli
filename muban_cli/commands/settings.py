@@ -46,6 +46,11 @@ def register_settings_commands(cli: click.Group) -> None:
         help='Request timeout in seconds'
     )
     @click.option(
+        '--max-retries',
+        type=int,
+        help='Max retries for transient errors (0 to disable)'
+    )
+    @click.option(
         '--no-verify-ssl',
         is_flag=True,
         help='Disable SSL certificate verification'
@@ -72,6 +77,7 @@ def register_settings_commands(cli: click.Group) -> None:
         client_id: Optional[str],
         client_secret: Optional[str],
         timeout: Optional[int],
+        max_retries: Optional[int],
         no_verify_ssl: bool,
         author: Optional[str],
         auto_upload: Optional[bool],
@@ -98,6 +104,7 @@ def register_settings_commands(cli: click.Group) -> None:
             click.echo(f"  Client Secret:   {'*' * 10 + '...' if config.client_secret else '(not configured)'}")
             click.echo(f"  Token:           {'*' * 20 + '...' if config.token else '(not authenticated)'}")
             click.echo(f"  Timeout:         {config.timeout}s")
+            click.echo(f"  Max Retries:     {config.max_retries}")
             click.echo(f"  Verify SSL:      {config.verify_ssl}")
             click.echo(f"  Default Author:  {config.default_author or '(not set)'}")
             click.echo(f"  Auto-upload:     {config.auto_upload_on_package}")
@@ -105,7 +112,7 @@ def register_settings_commands(cli: click.Group) -> None:
             return
         
         # Interactive configuration if no options provided
-        if not any([server, auth_server, client_id, client_secret, timeout, no_verify_ssl, author, auto_upload is not None]):
+        if not any([server, auth_server, client_id, client_secret, timeout, max_retries is not None, no_verify_ssl, author, auto_upload is not None]):
             click.echo("Interactive configuration setup:")
             
             current = config_manager.get()
@@ -127,6 +134,12 @@ def register_settings_commands(cli: click.Group) -> None:
                 type=int
             )
             
+            max_retries = click.prompt(
+                "Max retries for transient errors (0 to disable)",
+                default=current.max_retries,
+                type=int
+            )
+            
             author = click.prompt(
                 "Default author for template uploads (leave empty for none)",
                 default=current.default_author or '',
@@ -145,6 +158,8 @@ def register_settings_commands(cli: click.Group) -> None:
             updates['client_secret'] = client_secret
         if timeout:
             updates['timeout'] = timeout
+        if max_retries is not None:
+            updates['max_retries'] = max_retries
         if no_verify_ssl:
             updates['verify_ssl'] = False
         if author is not None:

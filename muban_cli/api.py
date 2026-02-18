@@ -58,12 +58,14 @@ class MubanAPIClient:
         if self._session is None:
             self._session = requests.Session()
             
-            # Configure retry strategy
+            # Configure retry strategy (only for transient errors, not 500 which is usually app error)
             retry_strategy = Retry(
-                total=3,
+                total=self.config.max_retries,
                 backoff_factor=1,
-                status_forcelist=[429, 500, 502, 503, 504],
+                backoff_max=120,  # Max backoff of 2 minutes
+                status_forcelist=[429, 502, 503, 504],
                 allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
+                respect_retry_after_header=True,  # Honor Retry-After header from 429 responses
             )
             adapter = HTTPAdapter(max_retries=retry_strategy)
             self._session.mount("http://", adapter)
@@ -130,6 +132,18 @@ class MubanAPIClient:
         try:
             error_data = response.json()
             error_msg = self._extract_error_message(error_data)
+            
+            # Log correlation ID for debugging/support
+            meta = error_data.get("meta", {})
+            correlation_id = meta.get("correlationId") or meta.get("correlation_id")
+            if correlation_id:
+                logger.error(
+                    "API error [%s %s] status=%d correlation_id=%s",
+                    response.request.method,
+                    response.request.url,
+                    response.status_code,
+                    correlation_id
+                )
         except ValueError:
             error_msg = response.text or f"HTTP {response.status_code}"
             error_data = {}
@@ -137,18 +151,18 @@ class MubanAPIClient:
         # Map status codes to exceptions
         if response.status_code == 401:
             raise AuthenticationError(
-                "Authentication failed. Please check your API key.",
+                "Authentication failed: " + (error_msg or "Please check your API key."),
                 details=error_msg
             )
         elif response.status_code == 403:
             raise PermissionDeniedError(
-                "Permission denied. You don't have access to this resource.",
+                "Permission denied: " + (error_msg or "You don't have access to this resource."),
                 status_code=response.status_code,
                 response_data=error_data
             )
         elif response.status_code == 404:
             raise TemplateNotFoundError(
-                "Resource not found.",
+                "Resource not found: " + (error_msg or "The requested resource does not exist."),
                 status_code=response.status_code,
                 response_data=error_data
             )
@@ -170,20 +184,40 @@ class MubanAPIClient:
             )
     
     def _extract_error_message(self, error_data: Dict[str, Any]) -> str:
-        """Extract error message from API response."""
-        # Try different error formats
+        """Extract error message from API response, including error codes and correlation ID."""
+        messages = []
+        
+        # Try to extract from errors array (includes code and message)
         if "errors" in error_data and error_data["errors"]:
             errors = error_data["errors"]
             if isinstance(errors, list) and errors:
-                return errors[0].get("message", str(errors[0]))
+                # Format all errors with their codes
+                error_messages = []
+                for err in errors:
+                    if isinstance(err, dict):
+                        code = err.get("code", "")
+                        msg = err.get("message", str(err))
+                        if code:
+                            error_messages.append(f"[{code}] {msg}")
+                        else:
+                            error_messages.append(msg)
+                    else:
+                        error_messages.append(str(err))
+                messages.append("; ".join(error_messages))
+        elif "message" in error_data:
+            messages.append(error_data["message"])
+        elif "data" in error_data:
+            messages.append(str(error_data["data"]))
+        else:
+            messages.append(str(error_data))
         
-        if "message" in error_data:
-            return error_data["message"]
+        # Append correlation ID if available (useful for support tickets)
+        meta = error_data.get("meta", {})
+        correlation_id = meta.get("correlationId") or meta.get("correlation_id")
+        if correlation_id:
+            messages.append(f"(Correlation ID: {correlation_id})")
         
-        if "data" in error_data:
-            return str(error_data["data"])
-        
-        return str(error_data)
+        return " ".join(messages)
     
     def _try_refresh_token(self) -> bool:
         """

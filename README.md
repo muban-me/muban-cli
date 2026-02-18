@@ -116,6 +116,7 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 | `MUBAN_CLIENT_ID` | OAuth2 Client ID (for client credentials flow) |
 | `MUBAN_CLIENT_SECRET` | OAuth2 Client Secret (for client credentials flow) |
 | `MUBAN_TIMEOUT` | Request timeout in seconds |
+| `MUBAN_MAX_RETRIES` | Max retries for transient errors (default: 3, set to 0 to disable) |
 | `MUBAN_VERIFY_SSL` | Enable/disable SSL verification |
 | `MUBAN_CONFIG_DIR` | Custom configuration directory |
 
@@ -722,6 +723,59 @@ The CLI provides detailed error messages and appropriate exit codes:
 | 0 | Success |
 | 1 | General error |
 | 130 | Interrupted (Ctrl+C) |
+
+### Detailed Error Messages
+
+When API errors occur, the CLI displays:
+
+- **Error code** - Machine-readable error identifier (e.g., `TEMPLATE_FILL_ERROR`)
+- **Error message** - Human-readable description
+- **Correlation ID** - Unique request identifier for support tickets
+
+Example error output:
+
+```text
+✗ API request failed: [TEMPLATE_FILL_ERROR] Failed to fill template: Unable to load report (Correlation ID: 00154aac-eb74-4867-a009-c9762fa0e059)
+```
+
+The correlation ID can be provided to support teams for in-depth error analysis in server logs.
+
+Correlation IDs are also logged to the application log file for batch operations.
+
+### GUI Error Dialogs
+
+In the graphical interface, API errors are displayed in a custom dialog that:
+
+- Shows the full error message in a scrollable text area
+- **Highlights the correlation ID** for easy identification
+- Provides a **"Copy ID"** button to quickly copy the correlation ID to clipboard
+- Provides a **"Copy All"** button to copy the entire error message
+
+This makes it easy to create support tickets with the relevant debugging information.
+
+### Retry Behavior
+
+The CLI automatically retries requests on transient network errors:
+
+| Status Code | Behavior |
+| ----------- | -------- |
+| 429 | Rate limited - retries honoring `Retry-After` header |
+| 502 | Bad gateway - retries (typically load balancer issue) |
+| 503 | Service unavailable - retries (temporary overload) |
+| 504 | Gateway timeout - retries (may succeed on retry) |
+| 500 | Internal error - **no retry** (application error, needs investigation) |
+
+The retry mechanism respects the `Retry-After` header sent by the server for 429 responses, up to a maximum backoff of 2 minutes.
+
+Configure retry behavior:
+
+```bash
+# Disable retries (fail fast)
+muban configure --max-retries 0
+
+# Set custom retry count (default: 3)
+export MUBAN_MAX_RETRIES=5
+```
 
 ### Common Errors
 

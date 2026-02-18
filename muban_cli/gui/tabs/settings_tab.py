@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 from muban_cli.config import get_config_manager, MubanConfig
 from muban_cli.auth import MubanAuthClient
 from muban_cli.gui.icons import create_logout_icon, create_login_icon
+from muban_cli.gui.error_dialog import show_error_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,12 @@ class SettingsTab(QWidget):
         self.timeout_spin.setValue(30)
         self.timeout_spin.setSuffix(" seconds")
         server_layout.addRow("Timeout:", self.timeout_spin)
+
+        self.max_retries_spin = QSpinBox()
+        self.max_retries_spin.setRange(0, 10)
+        self.max_retries_spin.setValue(3)
+        self.max_retries_spin.setToolTip("Max retries for transient errors (502, 503, 504, 429). Set to 0 to disable retries.")
+        server_layout.addRow("Max Retries:", self.max_retries_spin)
 
         self.author_input = QLineEdit()
         self.author_input.setPlaceholderText("Default author for template uploads")
@@ -230,6 +237,7 @@ class SettingsTab(QWidget):
             self.auth_server_input.setText(config.auth_server_url or "")
             self.verify_ssl_cb.setChecked(config.verify_ssl)
             self.timeout_spin.setValue(config.timeout)
+            self.max_retries_spin.setValue(config.max_retries)
             self.author_input.setText(config.default_author or "")
             self.auto_upload_cb.setChecked(config.auto_upload_on_package)
             self.client_id_input.setText(config.client_id or "")
@@ -276,6 +284,7 @@ class SettingsTab(QWidget):
             config.auth_server_url = self.auth_server_input.text().strip()
             config.verify_ssl = self.verify_ssl_cb.isChecked()
             config.timeout = self.timeout_spin.value()
+            config.max_retries = self.max_retries_spin.value()
             config.default_author = self.author_input.text().strip()
             config.auto_upload_on_package = self.auto_upload_cb.isChecked()
             config.client_id = self.client_id_input.text().strip()
@@ -308,6 +317,7 @@ class SettingsTab(QWidget):
             self.auth_server_input.clear()
             self.verify_ssl_cb.setChecked(True)
             self.timeout_spin.setValue(30)
+            self.max_retries_spin.setValue(3)
             self.author_input.clear()
             self.auto_upload_cb.setChecked(False)
             self.username_input.clear()
@@ -386,7 +396,7 @@ class SettingsTab(QWidget):
         """Handle login error."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
-        QMessageBox.critical(self, "Login Failed", error)
+        show_error_dialog(self, "Login Failed", error)
 
     def _login_client_credentials(self):
         """Login with client credentials."""
@@ -449,6 +459,7 @@ class SettingsTab(QWidget):
         self.auth_server_input.setEnabled(enabled)
         self.verify_ssl_cb.setEnabled(enabled)
         self.timeout_spin.setEnabled(enabled)
+        self.max_retries_spin.setEnabled(enabled)
         self.username_input.setEnabled(enabled)
         self.password_input.setEnabled(enabled)
         self.login_btn.setEnabled(enabled)

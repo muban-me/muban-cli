@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+from muban_cli.gui.error_dialog import show_error_dialog
 from muban_cli.gui.icons import (
     create_play_icon,
     create_arrow_up_icon,
@@ -543,7 +544,7 @@ class TemplatesTab(QWidget):
         """Handle upload error."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
-        QMessageBox.critical(self, "Upload Error", error)
+        show_error_dialog(self, "Upload Error", error)
 
     def _download_template(self):
         """Download selected template."""
@@ -569,7 +570,7 @@ class TemplatesTab(QWidget):
             client.download_template(template["id"], Path(file_path))
             QMessageBox.information(self, "Download Complete", f"Template saved to:\n{file_path}")
         except Exception as e:
-            QMessageBox.critical(self, "Download Error", str(e))
+            show_error_dialog(self, "Download Error", str(e))
 
     def _delete_template(self):
         """Delete selected template."""
@@ -596,7 +597,7 @@ class TemplatesTab(QWidget):
             QMessageBox.information(self, "Deleted", "Template deleted successfully.")
             self._load_templates()
         except Exception as e:
-            QMessageBox.critical(self, "Delete Error", str(e))
+            show_error_dialog(self, "Delete Error", str(e))
 
     def _generate_from_template(self):
         """Switch to generate tab with selected template."""
