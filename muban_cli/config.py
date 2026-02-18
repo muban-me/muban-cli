@@ -48,6 +48,7 @@ class MubanConfig:
     refresh_token: str = ""  # Refresh token for obtaining new access tokens
     token_expires_at: int = 0  # Token expiration timestamp (Unix epoch)
     timeout: int = DEFAULT_TIMEOUT
+    max_retries: int = 3  # Max retries for transient errors (502, 503, 504, 429). 0 to disable.
     verify_ssl: bool = True
     default_output_dir: str = "."
     default_format: str = "pdf"
@@ -67,7 +68,7 @@ class MubanConfig:
         valid_fields = {
             'server_url', 'auth_server_url', 'client_id', 'client_secret',
             'token', 'refresh_token', 'token_expires_at',
-            'timeout', 'verify_ssl', 'default_output_dir', 'default_format', 'verbose', 'page_size',
+            'timeout', 'max_retries', 'verify_ssl', 'default_output_dir', 'default_format', 'verbose', 'page_size',
             'default_author', 'auto_upload_on_package'
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}

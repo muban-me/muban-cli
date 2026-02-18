@@ -58,11 +58,11 @@ class MubanAPIClient:
         if self._session is None:
             self._session = requests.Session()
             
-            # Configure retry strategy
+            # Configure retry strategy (only for transient errors, not 500 which is usually app error)
             retry_strategy = Retry(
-                total=3,
+                total=self.config.max_retries,
                 backoff_factor=1,
-                status_forcelist=[429, 500, 502, 503, 504],
+                status_forcelist=[429, 502, 503, 504],
                 allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
             )
             adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -137,18 +137,18 @@ class MubanAPIClient:
         # Map status codes to exceptions
         if response.status_code == 401:
             raise AuthenticationError(
-                "Authentication failed. Please check your API key.",
+                "Authentication failed: " + (error_msg or "Please check your API key."),
                 details=error_msg
             )
         elif response.status_code == 403:
             raise PermissionDeniedError(
-                "Permission denied. You don't have access to this resource.",
+                "Permission denied: " + (error_msg or "You don't have access to this resource."),
                 status_code=response.status_code,
                 response_data=error_data
             )
         elif response.status_code == 404:
             raise TemplateNotFoundError(
-                "Resource not found.",
+                "Resource not found: " + (error_msg or "The requested resource does not exist."),
                 status_code=response.status_code,
                 response_data=error_data
             )
@@ -170,12 +170,24 @@ class MubanAPIClient:
             )
     
     def _extract_error_message(self, error_data: Dict[str, Any]) -> str:
-        """Extract error message from API response."""
-        # Try different error formats
+        """Extract error message from API response, including error codes."""
+        # Try to extract from errors array (includes code and message)
         if "errors" in error_data and error_data["errors"]:
             errors = error_data["errors"]
             if isinstance(errors, list) and errors:
-                return errors[0].get("message", str(errors[0]))
+                # Format all errors with their codes
+                error_messages = []
+                for err in errors:
+                    if isinstance(err, dict):
+                        code = err.get("code", "")
+                        msg = err.get("message", str(err))
+                        if code:
+                            error_messages.append(f"[{code}] {msg}")
+                        else:
+                            error_messages.append(msg)
+                    else:
+                        error_messages.append(str(err))
+                return "; ".join(error_messages)
         
         if "message" in error_data:
             return error_data["message"]
