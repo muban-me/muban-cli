@@ -116,6 +116,7 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 | `MUBAN_CLIENT_ID` | OAuth2 Client ID (for client credentials flow) |
 | `MUBAN_CLIENT_SECRET` | OAuth2 Client Secret (for client credentials flow) |
 | `MUBAN_TIMEOUT` | Request timeout in seconds |
+| `MUBAN_MAX_RETRIES` | Max retries for transient errors (default: 3, set to 0 to disable) |
 | `MUBAN_VERIFY_SSL` | Enable/disable SSL verification |
 | `MUBAN_CONFIG_DIR` | Custom configuration directory |
 
@@ -722,6 +723,44 @@ The CLI provides detailed error messages and appropriate exit codes:
 | 0 | Success |
 | 1 | General error |
 | 130 | Interrupted (Ctrl+C) |
+
+### Detailed Error Messages
+
+When API errors occur, the CLI displays:
+
+- **Error code** - Machine-readable error identifier (e.g., `TEMPLATE_FILL_ERROR`)
+- **Error message** - Human-readable description
+- **Correlation ID** - Unique request identifier for support tickets
+
+Example error output:
+
+```text
+✗ API request failed: [TEMPLATE_FILL_ERROR] Failed to fill template: Unable to load report (Correlation ID: 00154aac-eb74-4867-a009-c9762fa0e059)
+```
+
+The correlation ID can be provided to support teams for in-depth error analysis in server logs.
+
+### Retry Behavior
+
+The CLI automatically retries requests on transient network errors:
+
+| Status Code | Behavior |
+| ----------- | -------- |
+| 429 | Rate limited - retries with exponential backoff |
+| 502 | Bad gateway - retries (typically load balancer issue) |
+| 503 | Service unavailable - retries (temporary overload) |
+| 504 | Gateway timeout - retries (may succeed on retry) |
+| 500 | Internal error - **no retry** (application error, needs investigation) |
+
+Configure retry behavior:
+
+```bash
+# Disable retries (fail fast)
+muban configure --max-retries 0
+
+# Set custom retry count (default: 3)
+export MUBAN_MAX_RETRIES=5
+```
 
 ### Common Errors
 

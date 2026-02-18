@@ -170,7 +170,9 @@ class MubanAPIClient:
             )
     
     def _extract_error_message(self, error_data: Dict[str, Any]) -> str:
-        """Extract error message from API response, including error codes."""
+        """Extract error message from API response, including error codes and correlation ID."""
+        messages = []
+        
         # Try to extract from errors array (includes code and message)
         if "errors" in error_data and error_data["errors"]:
             errors = error_data["errors"]
@@ -187,15 +189,21 @@ class MubanAPIClient:
                             error_messages.append(msg)
                     else:
                         error_messages.append(str(err))
-                return "; ".join(error_messages)
+                messages.append("; ".join(error_messages))
+        elif "message" in error_data:
+            messages.append(error_data["message"])
+        elif "data" in error_data:
+            messages.append(str(error_data["data"]))
+        else:
+            messages.append(str(error_data))
         
-        if "message" in error_data:
-            return error_data["message"]
+        # Append correlation ID if available (useful for support tickets)
+        meta = error_data.get("meta", {})
+        correlation_id = meta.get("correlationId") or meta.get("correlation_id")
+        if correlation_id:
+            messages.append(f"(Correlation ID: {correlation_id})")
         
-        if "data" in error_data:
-            return str(error_data["data"])
-        
-        return str(error_data)
+        return " ".join(messages)
     
     def _try_refresh_token(self) -> bool:
         """
