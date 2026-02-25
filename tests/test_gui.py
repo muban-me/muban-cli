@@ -492,37 +492,8 @@ class TestFontDialog:
         assert hasattr(dialog, 'name_input')
         assert hasattr(dialog, 'face_checkboxes')
     
-    def test_font_dialog_guesses_face(self, qtbot, tmp_path):
-        """Test font dialog guesses face from filename."""
-        from muban_cli.gui.dialogs.font_dialog import FontDialog
-        
-        bold_font = tmp_path / "MyFont-Bold.ttf"
-        bold_font.write_bytes(b"fake font")
-        
-        dialog = FontDialog(str(bold_font))
-        qtbot.addWidget(dialog)
-        
-        assert dialog.face_checkboxes["bold"].isChecked()
-        # Other faces should not be pre-checked
-        assert not dialog.face_checkboxes["normal"].isChecked()
-        assert not dialog.face_checkboxes["italic"].isChecked()
-        assert not dialog.face_checkboxes["boldItalic"].isChecked()
-
-    def test_font_dialog_guesses_bolditalic(self, qtbot, tmp_path):
-        """Test font dialog guesses boldItalic from filename."""
-        from muban_cli.gui.dialogs.font_dialog import FontDialog
-
-        font_file = tmp_path / "MyFont-BoldItalic.ttf"
-        font_file.write_bytes(b"fake font")
-
-        dialog = FontDialog(str(font_file))
-        qtbot.addWidget(dialog)
-
-        assert dialog.face_checkboxes["boldItalic"].isChecked()
-        assert not dialog.face_checkboxes["bold"].isChecked()
-
-    def test_font_dialog_defaults_to_normal(self, qtbot, tmp_path):
-        """Test font dialog defaults to normal when no face detected."""
+    def test_font_dialog_all_faces_checked_by_default(self, qtbot, tmp_path):
+        """Test all font faces are checked by default."""
         from muban_cli.gui.dialogs.font_dialog import FontDialog
 
         font_file = tmp_path / "MyFont.ttf"
@@ -532,6 +503,9 @@ class TestFontDialog:
         qtbot.addWidget(dialog)
 
         assert dialog.face_checkboxes["normal"].isChecked()
+        assert dialog.face_checkboxes["bold"].isChecked()
+        assert dialog.face_checkboxes["italic"].isChecked()
+        assert dialog.face_checkboxes["boldItalic"].isChecked()
 
     def test_font_dialog_get_font_spec(self, qtbot, tmp_path):
         """Test getting FontSpec from dialog (backward compat)."""

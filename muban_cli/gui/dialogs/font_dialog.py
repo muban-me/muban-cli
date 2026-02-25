@@ -76,17 +76,9 @@ class FontDialog(QDialog):
             faces_layout.addWidget(cb)
         layout.addWidget(faces_group)
 
-        # Auto-detect face from filename and pre-check
-        filename_lower = self.file_path.stem.lower()
-        if "bolditalic" in filename_lower or "bold_italic" in filename_lower:
-            self.face_checkboxes["boldItalic"].setChecked(True)
-        elif "bold" in filename_lower:
-            self.face_checkboxes["bold"].setChecked(True)
-        elif "italic" in filename_lower:
-            self.face_checkboxes["italic"].setChecked(True)
-        else:
-            # Default to normal for files without a clear face indicator
-            self.face_checkboxes["normal"].setChecked(True)
+        # All faces checked by default (most common use case)
+        for cb in self.face_checkboxes.values():
+            cb.setChecked(True)
 
         # Embedded
         embedded_form = QFormLayout()
