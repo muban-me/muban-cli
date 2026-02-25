@@ -490,7 +490,7 @@ class TestFontDialog:
         # Dialog should have a title and form fields
         assert dialog.windowTitle() == "Add Font"
         assert hasattr(dialog, 'name_input')
-        assert hasattr(dialog, 'face_combo')
+        assert hasattr(dialog, 'face_checkboxes')
     
     def test_font_dialog_guesses_face(self, qtbot, tmp_path):
         """Test font dialog guesses face from filename."""
@@ -502,10 +502,39 @@ class TestFontDialog:
         dialog = FontDialog(str(bold_font))
         qtbot.addWidget(dialog)
         
-        assert dialog.face_combo.currentText() == "bold"
-    
+        assert dialog.face_checkboxes["bold"].isChecked()
+        # Other faces should not be pre-checked
+        assert not dialog.face_checkboxes["normal"].isChecked()
+        assert not dialog.face_checkboxes["italic"].isChecked()
+        assert not dialog.face_checkboxes["boldItalic"].isChecked()
+
+    def test_font_dialog_guesses_bolditalic(self, qtbot, tmp_path):
+        """Test font dialog guesses boldItalic from filename."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont-BoldItalic.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        assert dialog.face_checkboxes["boldItalic"].isChecked()
+        assert not dialog.face_checkboxes["bold"].isChecked()
+
+    def test_font_dialog_defaults_to_normal(self, qtbot, tmp_path):
+        """Test font dialog defaults to normal when no face detected."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        assert dialog.face_checkboxes["normal"].isChecked()
+
     def test_font_dialog_get_font_spec(self, qtbot, tmp_path):
-        """Test getting FontSpec from dialog."""
+        """Test getting FontSpec from dialog (backward compat)."""
         from muban_cli.gui.dialogs.font_dialog import FontDialog
         
         font_file = tmp_path / "TestFont.ttf"
@@ -515,13 +544,58 @@ class TestFontDialog:
         qtbot.addWidget(dialog)
         
         dialog.name_input.setText("Test Font")
-        dialog.face_combo.setCurrentText("normal")
+        # normal is already checked by default for this filename
         dialog.embedded_cb.setChecked(True)
         
         spec = dialog.get_font_spec()
         assert spec.name == "Test Font"
         assert spec.face == "normal"
         assert spec.embedded is True
+
+    def test_font_dialog_multi_face_selection(self, qtbot, tmp_path):
+        """Test selecting multiple faces returns multiple FontSpecs."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        dialog.name_input.setText("My Font")
+        # Select multiple faces
+        dialog.face_checkboxes["normal"].setChecked(True)
+        dialog.face_checkboxes["bold"].setChecked(True)
+        dialog.face_checkboxes["italic"].setChecked(True)
+        dialog.face_checkboxes["boldItalic"].setChecked(False)
+
+        specs = dialog.get_font_specs()
+        assert len(specs) == 3
+        faces = {s.face for s in specs}
+        assert faces == {"normal", "bold", "italic"}
+        # All should share the same file, name, and embedded flag
+        for s in specs:
+            assert s.file_path == font_file
+            assert s.name == "My Font"
+            assert s.embedded is True
+
+    def test_font_dialog_selected_faces(self, qtbot, tmp_path):
+        """Test selected_faces helper method."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        # Uncheck default, check specific ones
+        for cb in dialog.face_checkboxes.values():
+            cb.setChecked(False)
+        dialog.face_checkboxes["bold"].setChecked(True)
+        dialog.face_checkboxes["boldItalic"].setChecked(True)
+
+        assert dialog.selected_faces() == ["bold", "boldItalic"]
 
 
 class TestUploadDialog:

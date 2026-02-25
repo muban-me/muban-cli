@@ -281,14 +281,28 @@ class PackageTab(QWidget):
         if not file_path:
             return
 
-        # Show font dialog
+        # Show font dialog (supports multi-face selection)
         from muban_cli.gui.dialogs.font_dialog import FontDialog
 
         dialog = FontDialog(file_path, self)
         if dialog.exec():
-            font_spec = dialog.get_font_spec()
-            self._fonts.append(font_spec)
-            self._refresh_fonts_table()
+            font_specs = dialog.get_font_specs()
+            # Deduplicate: skip (name, face) pairs already in the list
+            existing = {(f.name, f.face) for f in self._fonts}
+            new_specs = [s for s in font_specs if (s.name, s.face) not in existing]
+            skipped = len(font_specs) - len(new_specs)
+            if skipped:
+                faces = ", ".join(
+                    s.face for s in font_specs if (s.name, s.face) in existing
+                )
+                QMessageBox.information(
+                    self,
+                    "Duplicates Skipped",
+                    f"Skipped {skipped} already registered face(s): {faces}",
+                )
+            if new_specs:
+                self._fonts.extend(new_specs)
+                self._refresh_fonts_table()
 
     def _browse_fonts_xml(self):
         """Browse for existing fonts.xml file."""
