@@ -221,14 +221,14 @@ class TestPackageTab:
         assert tab is not None
 
     def test_package_tab_has_file_input(self, qtbot, mock_config):
-        """Test package tab has JRXML file input."""
+        """Test package tab has template file input."""
         from muban_cli.gui.tabs.package_tab import PackageTab
         
         tab = PackageTab()
         qtbot.addWidget(tab)
         
-        assert hasattr(tab, 'jrxml_input')
-        assert tab.jrxml_input is not None
+        assert hasattr(tab, 'template_input')
+        assert tab.template_input is not None
 
     def test_package_tab_has_package_button(self, qtbot, mock_config):
         """Test package tab has package button."""
@@ -251,17 +251,17 @@ class TestPackageTab:
         assert hasattr(tab, 'dry_run_cb')
         assert tab.dry_run_cb is not None
 
-    def test_set_jrxml_path(self, qtbot, mock_config, tmp_path):
-        """Test setting JRXML path."""
+    def test_set_template_path(self, qtbot, mock_config, tmp_path):
+        """Test setting template path."""
         from muban_cli.gui.tabs.package_tab import PackageTab
         
         tab = PackageTab()
         qtbot.addWidget(tab)
         
         test_path = str(tmp_path / "test.jrxml")
-        tab.jrxml_input.setText(test_path)
+        tab.template_input.setText(test_path)
         
-        assert tab.jrxml_input.text() == test_path
+        assert tab.template_input.text() == test_path
 
 
 class TestPackageWorker:
@@ -275,7 +275,7 @@ class TestPackageWorker:
         jrxml_path.write_text('<?xml version="1.0"?><jasperReport/>')
         
         worker = PackageWorker(
-            jrxml_path=jrxml_path,
+            template_path=jrxml_path,
             output_path=None,
             fonts=[],
             reports_dir_param="REPORTS_DIR",
@@ -283,7 +283,7 @@ class TestPackageWorker:
         )
         
         assert worker is not None
-        assert worker.jrxml_path == jrxml_path
+        assert worker.template_path == jrxml_path
         assert worker.dry_run is True
 
     def test_package_worker_with_fonts_xml(self, tmp_path):
@@ -297,7 +297,7 @@ class TestPackageWorker:
         fonts_xml.write_text('<?xml version="1.0"?><fontFamilies/>')
         
         worker = PackageWorker(
-            jrxml_path=jrxml_path,
+            template_path=jrxml_path,
             output_path=None,
             fonts=[],
             reports_dir_param="REPORTS_DIR",
@@ -490,22 +490,25 @@ class TestFontDialog:
         # Dialog should have a title and form fields
         assert dialog.windowTitle() == "Add Font"
         assert hasattr(dialog, 'name_input')
-        assert hasattr(dialog, 'face_combo')
+        assert hasattr(dialog, 'face_checkboxes')
     
-    def test_font_dialog_guesses_face(self, qtbot, tmp_path):
-        """Test font dialog guesses face from filename."""
+    def test_font_dialog_all_faces_checked_by_default(self, qtbot, tmp_path):
+        """Test all font faces are checked by default."""
         from muban_cli.gui.dialogs.font_dialog import FontDialog
-        
-        bold_font = tmp_path / "MyFont-Bold.ttf"
-        bold_font.write_bytes(b"fake font")
-        
-        dialog = FontDialog(str(bold_font))
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
         qtbot.addWidget(dialog)
-        
-        assert dialog.face_combo.currentText() == "bold"
-    
+
+        assert dialog.face_checkboxes["normal"].isChecked()
+        assert dialog.face_checkboxes["bold"].isChecked()
+        assert dialog.face_checkboxes["italic"].isChecked()
+        assert dialog.face_checkboxes["boldItalic"].isChecked()
+
     def test_font_dialog_get_font_spec(self, qtbot, tmp_path):
-        """Test getting FontSpec from dialog."""
+        """Test getting FontSpec from dialog (backward compat)."""
         from muban_cli.gui.dialogs.font_dialog import FontDialog
         
         font_file = tmp_path / "TestFont.ttf"
@@ -515,13 +518,58 @@ class TestFontDialog:
         qtbot.addWidget(dialog)
         
         dialog.name_input.setText("Test Font")
-        dialog.face_combo.setCurrentText("normal")
+        # normal is already checked by default for this filename
         dialog.embedded_cb.setChecked(True)
         
         spec = dialog.get_font_spec()
         assert spec.name == "Test Font"
         assert spec.face == "normal"
         assert spec.embedded is True
+
+    def test_font_dialog_multi_face_selection(self, qtbot, tmp_path):
+        """Test selecting multiple faces returns multiple FontSpecs."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        dialog.name_input.setText("My Font")
+        # Select multiple faces
+        dialog.face_checkboxes["normal"].setChecked(True)
+        dialog.face_checkboxes["bold"].setChecked(True)
+        dialog.face_checkboxes["italic"].setChecked(True)
+        dialog.face_checkboxes["boldItalic"].setChecked(False)
+
+        specs = dialog.get_font_specs()
+        assert len(specs) == 3
+        faces = {s.face for s in specs}
+        assert faces == {"normal", "bold", "italic"}
+        # All should share the same file, name, and embedded flag
+        for s in specs:
+            assert s.file_path == font_file
+            assert s.name == "My Font"
+            assert s.embedded is True
+
+    def test_font_dialog_selected_faces(self, qtbot, tmp_path):
+        """Test selected_faces helper method."""
+        from muban_cli.gui.dialogs.font_dialog import FontDialog
+
+        font_file = tmp_path / "MyFont.ttf"
+        font_file.write_bytes(b"fake font")
+
+        dialog = FontDialog(str(font_file))
+        qtbot.addWidget(dialog)
+
+        # Uncheck default, check specific ones
+        for cb in dialog.face_checkboxes.values():
+            cb.setChecked(False)
+        dialog.face_checkboxes["bold"].setChecked(True)
+        dialog.face_checkboxes["boldItalic"].setChecked(True)
+
+        assert dialog.selected_faces() == ["bold", "boldItalic"]
 
 
 class TestUploadDialog:
