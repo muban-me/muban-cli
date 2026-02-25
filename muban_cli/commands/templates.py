@@ -53,7 +53,7 @@ def register_template_commands(cli: click.Group) -> None:
     @click.option('--page', '-p', type=int, default=1, help='Page number')
     @click.option('--size', '-n', type=int, default=20, help='Items per page')
     @click.option('--search', '-s', help='Search term')
-    @click.option('--sort-by', type=click.Choice(['name', 'author', 'created', 'fileSize']), 
+    @click.option('--sort-by', type=click.Choice(['name', 'author', 'created', 'fileSize', 'templateType']), 
                   default='created', help='Sort field (default: created)')
     @click.option('--sort-dir', type=click.Choice(['asc', 'desc']), 
                   default='desc', help='Sort direction (default: desc)')

@@ -142,10 +142,11 @@ class TemplatesTab(QWidget):
         1: "name",
         2: "author",
         3: "fileSize",
-        4: "created",
+        4: "templateType",
+        5: "created",
     }
     # Column headers without sort indicator
-    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Created"]
+    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Type", "Created"]
 
     # Row height for page size calculation (pixels)
     ROW_HEIGHT = 26
@@ -244,7 +245,7 @@ class TemplatesTab(QWidget):
         layout.addLayout(search_layout)
 
         # Templates table
-        self.table = QTableWidget(0, 5)
+        self.table = QTableWidget(0, 6)
         self._update_header_labels()
         header = self.table.horizontalHeader()
         if header:
@@ -259,6 +260,7 @@ class TemplatesTab(QWidget):
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(2, 150)
         self.table.setColumnWidth(3, 80)
+        self.table.setColumnWidth(4, 70)
         layout.addWidget(self.table)
 
         # Progress
@@ -432,11 +434,13 @@ class TemplatesTab(QWidget):
             size_item = QTableWidgetItem(size_str)
             size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(i, 3, size_item)
+            # Template type (JASPER or DOCX)
+            self.table.setItem(i, 4, QTableWidgetItem(t.get("templateType", "")))
             # Format date: "2025-12-18T23:01:39.952558" -> "2025-12-18 23:01:39"
             created = t.get("created", "")
             if created:
                 created = created.replace("T", " ")[:19]
-            self.table.setItem(i, 4, QTableWidgetItem(created))
+            self.table.setItem(i, 5, QTableWidgetItem(created))
 
         # Update vertical header to show absolute row numbers
         start_index = (self._current_page - 1) * self._page_size

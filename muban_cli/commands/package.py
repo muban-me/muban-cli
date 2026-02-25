@@ -1,7 +1,7 @@
 """
 Template packaging commands.
 
-This module provides commands for packaging JRXML templates into
+This module provides commands for packaging JRXML or DOCX templates into
 deployable ZIP packages.
 """
 
@@ -20,11 +20,11 @@ def validate_font_options(ctx, param, value):
 
 
 @click.command('package')
-@click.argument('jrxml_file', type=click.Path(exists=True, path_type=Path))
+@click.argument('template_file', type=click.Path(exists=True, path_type=Path))
 @click.option(
     '-o', '--output',
     type=click.Path(path_type=Path),
-    help='Output ZIP file path (default: <jrxml-name>.zip)'
+    help='Output ZIP file path (default: <template-name>.zip)'
 )
 @click.option(
     '--dry-run',
@@ -39,7 +39,7 @@ def validate_font_options(ctx, param, value):
 @click.option(
     '--reports-dir-param',
     default='REPORTS_DIR',
-    help='Name of the path parameter in JRXML (default: REPORTS_DIR)'
+    help='Name of the path parameter in JRXML templates (default: REPORTS_DIR, ignored for DOCX)'
 )
 @click.option(
     '--upload', '-u',
@@ -85,7 +85,7 @@ def validate_font_options(ctx, param, value):
     help='Path to existing fonts.xml file to include in package.'
 )
 def package_cmd(
-    jrxml_file: Path,
+    template_file: Path,
     output: Optional[Path],
     dry_run: bool,
     verbose: bool,
@@ -100,16 +100,21 @@ def package_cmd(
     fonts_xml: Optional[Path]
 ):
     """
-    Package a JRXML template into a deployable ZIP package.
+    Package a JRXML or DOCX template into a deployable ZIP package.
     
-    This command analyzes the JRXML file to find all referenced assets
-    (images, subreports) and packages them together in a ZIP file
+    This command packages a template file (with optional fonts) into a ZIP file
     that can be uploaded to the Muban service.
+    
+    For JRXML templates, it analyzes the file to find all referenced assets
+    (images, subreports) and packages them together.
+    
+    For DOCX templates, it simply packages the DOCX file with optional fonts.
     
     \b
     Examples:
       # Basic packaging (creates template.zip)
       muban package template.jrxml
+      muban package template.docx
       
       # Specify output file
       muban package template.jrxml -o my-package.zip
@@ -117,12 +122,12 @@ def package_cmd(
       # Preview what would be included (no ZIP created)
       muban package template.jrxml --dry-run
       
-      # Use custom path parameter name
+      # Use custom path parameter name (JRXML only)
       muban package template.jrxml --reports-dir-param BASE_PATH
       
       # Package and upload in one step
       muban package template.jrxml --upload
-      muban package template.jrxml -u --name "My Report" --author "John"
+      muban package template.docx -u --name "My Report" --author "John"
       
       # Include custom fonts in the package
       muban package template.jrxml \\
@@ -130,7 +135,7 @@ def package_cmd(
         --font-file Arial_Bold.ttf --font-name Arial --font-face bold --embedded
     
     \b
-    The packager automatically:
+    For JRXML templates, the packager automatically:
       - Detects image references (PNG, JPG, SVG, etc.)
       - Detects dynamic directories (includes all files)
       - Preserves the asset directory structure
@@ -142,11 +147,11 @@ def package_cmd(
     into a single font family with multiple faces.
     """
     # Resolve paths
-    jrxml_file = jrxml_file.resolve()
+    template_file = template_file.resolve()
     
     if verbose:
-        print_info(f"Packaging: {jrxml_file.name}")
-        print_info(f"Working directory: {jrxml_file.parent}")
+        print_info(f"Packaging: {template_file.name}")
+        print_info(f"Working directory: {template_file.parent}")
     
     # Parse font options
     fonts: List[FontSpec] = []
@@ -180,7 +185,7 @@ def package_cmd(
     
     # Create packager and run
     packager = JRXMLPackager(reports_dir_param=reports_dir_param)
-    result = packager.package(jrxml_file, output, dry_run=dry_run, fonts=fonts, fonts_xml_path=fonts_xml)
+    result = packager.package(template_file, output, dry_run=dry_run, fonts=fonts, fonts_xml_path=fonts_xml)
     
     # Display results
     _display_result(result, verbose, dry_run, fonts)
@@ -251,19 +256,19 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
     
     # Build a set of included asset paths for quick lookup
     included_paths = set()
-    if result.main_jrxml:
+    if result.main_template:
         for p in result.assets_included:
             try:
-                rel = p.relative_to(result.main_jrxml.parent)
+                rel = p.relative_to(result.main_template.parent)
                 included_paths.add(str(rel).replace('\\', '/'))
             except ValueError:
                 included_paths.add(str(p))
     
-    # Show main JRXML
-    if verbose and result.main_jrxml:
+    # Show main template
+    if verbose and result.main_template:
         click.echo()
-        click.echo(click.style("Main template:", bold=True))
-        click.echo(f"  {result.main_jrxml.name}")
+        click.echo(click.style(f"Main template ({result.template_type}):", bold=True))
+        click.echo(f"  {result.main_template.name}")
     
     # Show found assets
     if result.assets_found:
@@ -280,7 +285,7 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
                 # Calculate effective path by simulating cd to source file's dir
                 # then applying REPORTS_DIR + asset path, normalized to main template root
                 # Use string concatenation (POSIX: "../" + "/path" = "..//path" = "../path")
-                if result.main_jrxml:
+                if result.main_template:
                     source_dir = asset.source_file.parent
                     combined = asset.reports_dir_value + asset.path
                     # Normalize double slashes (POSIX semantics)
@@ -288,7 +293,7 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
                         combined = combined.replace('//', '/')
                     resolved_abs = (source_dir / combined).resolve()
                     try:
-                        effective_path = str(resolved_abs.relative_to(result.main_jrxml.parent)).replace('\\', '/')
+                        effective_path = str(resolved_abs.relative_to(result.main_template.parent)).replace('\\', '/')
                     except ValueError:
                         # Path is outside main template dir
                         effective_path = str(resolved_abs).replace('\\', '/')

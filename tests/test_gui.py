@@ -221,14 +221,14 @@ class TestPackageTab:
         assert tab is not None
 
     def test_package_tab_has_file_input(self, qtbot, mock_config):
-        """Test package tab has JRXML file input."""
+        """Test package tab has template file input."""
         from muban_cli.gui.tabs.package_tab import PackageTab
         
         tab = PackageTab()
         qtbot.addWidget(tab)
         
-        assert hasattr(tab, 'jrxml_input')
-        assert tab.jrxml_input is not None
+        assert hasattr(tab, 'template_input')
+        assert tab.template_input is not None
 
     def test_package_tab_has_package_button(self, qtbot, mock_config):
         """Test package tab has package button."""
@@ -251,17 +251,17 @@ class TestPackageTab:
         assert hasattr(tab, 'dry_run_cb')
         assert tab.dry_run_cb is not None
 
-    def test_set_jrxml_path(self, qtbot, mock_config, tmp_path):
-        """Test setting JRXML path."""
+    def test_set_template_path(self, qtbot, mock_config, tmp_path):
+        """Test setting template path."""
         from muban_cli.gui.tabs.package_tab import PackageTab
         
         tab = PackageTab()
         qtbot.addWidget(tab)
         
         test_path = str(tmp_path / "test.jrxml")
-        tab.jrxml_input.setText(test_path)
+        tab.template_input.setText(test_path)
         
-        assert tab.jrxml_input.text() == test_path
+        assert tab.template_input.text() == test_path
 
 
 class TestPackageWorker:
@@ -275,7 +275,7 @@ class TestPackageWorker:
         jrxml_path.write_text('<?xml version="1.0"?><jasperReport/>')
         
         worker = PackageWorker(
-            jrxml_path=jrxml_path,
+            template_path=jrxml_path,
             output_path=None,
             fonts=[],
             reports_dir_param="REPORTS_DIR",
@@ -283,7 +283,7 @@ class TestPackageWorker:
         )
         
         assert worker is not None
-        assert worker.jrxml_path == jrxml_path
+        assert worker.template_path == jrxml_path
         assert worker.dry_run is True
 
     def test_package_worker_with_fonts_xml(self, tmp_path):
@@ -297,7 +297,7 @@ class TestPackageWorker:
         fonts_xml.write_text('<?xml version="1.0"?><fontFamilies/>')
         
         worker = PackageWorker(
-            jrxml_path=jrxml_path,
+            template_path=jrxml_path,
             output_path=None,
             fonts=[],
             reports_dir_param="REPORTS_DIR",

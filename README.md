@@ -1,6 +1,6 @@
 # Muban CLI
 
-A robust command-line interface for the **Muban Document Generation Service**. Manage JasperReports templates and generate documents directly from your terminal.
+A robust command-line interface for the **Muban Document Generation Service**. Manage JasperReports (JRXML) and DOCX templates and generate documents directly from your terminal.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -9,8 +9,8 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 
 - **Graphical User Interface** - Optional PyQt6-based GUI for visual template management and document generation
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
-- **Template Management** - List, upload, download, and delete templates
-- **Template Packaging** - Package JRXML templates with all dependencies (images, subreports) into ZIP
+- **Template Management** - List, upload, download, and delete templates (JRXML and DOCX)
+- **Template Packaging** - Package JRXML or DOCX templates with optional fonts into deployable ZIP packages
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
@@ -199,6 +199,7 @@ muban list
 muban list --search "invoice" --format json
 muban list --format csv > templates.csv    # Export to CSV
 muban list --page 2 --size 50
+muban list --sort-by templateType           # Sort by template type (JASPER/DOCX)
 
 # Search templates
 muban search "quarterly report"
@@ -229,11 +230,14 @@ muban delete TEMPLATE_ID --yes  # Skip confirmation
 
 ### Template Packaging
 
-The `package` command analyzes a JRXML template file and packages it with all its dependencies (images, subreports) into a ZIP file ready for upload.
+The `package` command packages a template file (JRXML or DOCX) into a ZIP file ready for upload. For JRXML templates, it analyzes the file and includes all dependencies (images, subreports). For DOCX templates, it packages the file with optional custom fonts.
 
 ```bash
-# Package a template (creates template.zip)
+# Package a JRXML template (creates template.zip)
 muban package template.jrxml
+
+# Package a DOCX template
+muban package template.docx
 
 # Specify output path
 muban package template.jrxml -o package.zip
@@ -262,15 +266,18 @@ muban package template.jrxml --fonts-xml path/to/fonts.xml
 
 # Package and upload in one step
 muban package template.jrxml --upload
+muban package template.docx --upload
 
 # Package and upload with custom name/author
 muban package template.jrxml --upload --name "My Report" --author "John Doe"
+muban package template.docx -u --name "My Letter" --author "John Doe"
 ```
 
 **Features:**
 
-- **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports
-- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` files to include their dependencies
+- **JRXML & DOCX Support** - Package both JasperReports and DOCX template types
+- **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports (JRXML only)
+- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` files to include their dependencies (JRXML only)
 - **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
@@ -284,7 +291,7 @@ muban package template.jrxml --upload --name "My Report" --author "John Doe"
 ℹ Packaging: invoice.jrxml
 ℹ Working directory: /projects/templates
 
-Main template:
+Main template (JASPER):
   invoice.jrxml
 
 Assets found: 8
@@ -306,6 +313,8 @@ Assets found: 8
 ```bash
 # 1. Package the template
 muban package my-report.jrxml -o my-report.zip
+# or for DOCX templates:
+muban package my-letter.docx -o my-letter.zip
 
 # 2. Upload to the server
 muban push my-report.zip --name "My Report" --author "Developer"
@@ -578,8 +587,9 @@ The GUI provides a tabbed interface with the following sections:
 
 #### **📦 Package Tab**
 
-- Package JRXML template files with all dependencies (images, subreports)
-- Visual asset discovery and preview
+- Package JRXML or DOCX template files into deployable ZIP packages
+- For JRXML: visual asset discovery and preview of images and subreports
+- For DOCX: simple packaging with optional font bundling
 - Font bundling configuration
 - Dry-run mode to preview package contents
 - Auto-upload to server after packaging (when enabled in Settings)
@@ -588,6 +598,7 @@ The GUI provides a tabbed interface with the following sections:
 
 - Browse all templates on the server with pagination
 - Search and filter templates
+- Sort by name, author, size, type, or date
 - View template details, parameters, and fields
 - Upload new templates (ZIP format)
 - Download templates to local filesystem

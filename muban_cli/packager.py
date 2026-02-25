@@ -1,14 +1,19 @@
 """
-JRXML Template Packager.
+Template Packager.
 
-This module provides functionality to package a JRXML template and its dependencies
-into a ZIP package suitable for uploading to the Muban Document Generation Service.
+This module provides functionality to package JRXML or DOCX templates and their 
+dependencies into a ZIP package suitable for uploading to the Muban Document 
+Generation Service.
 
-The packager:
+For JRXML templates, the packager:
 1. Parses the JRXML file to find asset references (images, subreports)
 2. Resolves asset paths relative to the JRXML file location
 3. Creates a ZIP archive preserving the directory structure
 4. Optionally bundles custom fonts with fonts.xml configuration
+
+For DOCX templates, the packager:
+1. Creates a ZIP archive containing the DOCX file
+2. Optionally bundles custom fonts with fonts.xml configuration
 """
 
 import re
@@ -49,7 +54,8 @@ class PackageResult:
     """Result of a template packaging operation."""
     success: bool
     output_path: Optional[Path] = None
-    main_jrxml: Optional[Path] = None
+    main_template: Optional[Path] = None  # Main JRXML or DOCX file
+    template_type: str = "JASPER"  # "JASPER" or "DOCX"
     assets_found: List[AssetReference] = field(default_factory=list)
     assets_missing: List[AssetReference] = field(default_factory=list)
     assets_included: List[Path] = field(default_factory=list)
@@ -59,6 +65,15 @@ class PackageResult:
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    
+    # Backward compatibility alias
+    @property
+    def main_jrxml(self) -> Optional[Path]:
+        return self.main_template
+    
+    @main_jrxml.setter
+    def main_jrxml(self, value: Optional[Path]):
+        self.main_template = value
 
 
 # Backward compatibility alias
@@ -67,17 +82,23 @@ CompilationResult = PackageResult
 
 class JRXMLPackager:
     """
-    Packages JRXML templates and their dependencies into a ZIP package.
+    Packages JRXML or DOCX templates and their dependencies into a ZIP package.
     
-    The packager automatically detects:
+    For JRXML templates, the packager automatically detects:
     - Image references using the configurable REPORTS_DIR parameter
     - Directory references with dynamic filenames (includes all files)
-    - Subreport references (future)
-    - Font files (future)
+    - Subreport references
+    - Font files
+    
+    For DOCX templates, the packager:
+    - Creates a ZIP archive containing the DOCX file
+    - Optionally bundles custom fonts with fonts.xml configuration
     
     Example usage:
         packager = JRXMLPackager()
         result = packager.package("template.jrxml", "output.zip")
+        # Or for DOCX:
+        result = packager.package("template.docx", "output.zip")
         if result.success:
             print(f"Created: {result.output_path}")
         else:
@@ -139,18 +160,18 @@ class JRXMLPackager:
     
     def package(
         self,
-        jrxml_path: Path,
+        template_path: Path,
         output_path: Optional[Path] = None,
         dry_run: bool = False,
         fonts: Optional[List[FontSpec]] = None,
         fonts_xml_path: Optional[Path] = None
     ) -> PackageResult:
         """
-        Package a JRXML template into a ZIP package.
+        Package a JRXML or DOCX template into a ZIP package.
         
         Args:
-            jrxml_path: Path to the main JRXML file
-            output_path: Output ZIP file path (default: <jrxml_name>.zip)
+            template_path: Path to the main template file (.jrxml or .docx)
+            output_path: Output ZIP file path (default: <template_name>.zip)
             dry_run: If True, don't create ZIP, just analyze dependencies
             fonts: Optional list of FontSpec objects to include in the package
             fonts_xml_path: Optional path to existing fonts.xml file to include
@@ -162,30 +183,61 @@ class JRXMLPackager:
         fonts = fonts or []
         
         # Validate input
-        jrxml_path = Path(jrxml_path).resolve()
-        if not jrxml_path.exists():
-            result.errors.append(f"JRXML file not found: {jrxml_path}")
+        template_path = Path(template_path).resolve()
+        if not template_path.exists():
+            result.errors.append(f"Template file not found: {template_path}")
             return result
         
-        if not jrxml_path.suffix.lower() == '.jrxml':
-            result.warnings.append(f"File does not have .jrxml extension: {jrxml_path}")
+        # Determine template type from extension
+        ext = template_path.suffix.lower()
+        if ext == '.docx':
+            result.template_type = "DOCX"
+        elif ext == '.jrxml':
+            result.template_type = "JASPER"
+        else:
+            result.warnings.append(f"Unknown template extension: {ext} (expected .jrxml or .docx)")
+            result.template_type = "JASPER"  # Default assumption
         
-        result.main_jrxml = jrxml_path
-        base_dir = jrxml_path.parent
+        result.main_template = template_path
+        base_dir = template_path.parent
         
         # Set default output path
         if output_path is None:
-            output_path = jrxml_path.with_suffix('.zip')
+            output_path = template_path.with_suffix('.zip')
         else:
             output_path = Path(output_path).resolve()
         
         result.output_path = output_path
         
+        # For DOCX templates, skip asset analysis (no embedded assets to extract)
+        if result.template_type == "DOCX":
+            # Store fonts in result
+            if fonts_xml_path and fonts_xml_path.exists():
+                parsed_fonts = self._parse_fonts_xml(fonts_xml_path)
+                result.fonts_xml_files = [abs_path for _, abs_path in parsed_fonts if abs_path.exists()]
+            else:
+                result.fonts_included = fonts
+            
+            if dry_run:
+                result.success = True
+                return result
+            
+            # Create ZIP archive with just the DOCX file
+            try:
+                self._create_zip(template_path, [], output_path, fonts, fonts_xml_path)
+                result.success = True
+            except Exception as e:
+                result.errors.append(f"Failed to create ZIP: {e}")
+                return result
+            
+            return result
+        
+        # JRXML-specific asset analysis
         # Parse JRXML and extract asset references (with recursive subreport analysis)
         try:
             processed_files: Set[Path] = set()  # Track processed files to avoid loops
             assets = self._extract_asset_references_recursive(
-                jrxml_path, base_dir, result, processed_files
+                template_path, base_dir, result, processed_files
             )
             result.assets_found = assets
         except Exception as e:
@@ -273,7 +325,7 @@ class JRXMLPackager:
         
         # Create ZIP archive
         try:
-            self._create_zip(jrxml_path, assets_to_include, output_path, fonts, fonts_xml_path)
+            self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
             result.success = True
         except Exception as e:
             result.errors.append(f"Failed to create ZIP: {e}")
@@ -483,20 +535,27 @@ class JRXMLPackager:
 
     def _create_zip(
         self,
-        jrxml_path: Path,
+        template_path: Path,
         assets: List[Tuple[Path, str]],
         output_path: Path,
         fonts: Optional[List[FontSpec]] = None,
         fonts_xml_path: Optional[Path] = None
     ) -> None:
         """
-        Create a ZIP archive with the JRXML and its assets.
+        Create a ZIP archive with the template and its assets.
         
         The ZIP structure preserves the relative paths of assets
-        as they appear in the JRXML file. If fonts are provided,
+        as they appear in the template file. If fonts are provided,
         creates a fonts.xml configuration and includes font files
         in a fonts/ directory. Alternatively, an existing fonts.xml
         file can be included directly.
+        
+        Args:
+            template_path: Path to the main template file (.jrxml or .docx)
+            assets: List of (absolute_path, archive_path) tuples for assets
+            output_path: Path for the output ZIP file
+            fonts: Optional list of FontSpec objects to include
+            fonts_xml_path: Optional path to existing fonts.xml file
         """
         fonts = fonts or []
         
@@ -504,9 +563,9 @@ class JRXMLPackager:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # Add the main JRXML file at the root
-            zf.write(jrxml_path, jrxml_path.name)
-            logger.debug(f"Added: {jrxml_path.name}")
+            # Add the main template file at the root
+            zf.write(template_path, template_path.name)
+            logger.debug(f"Added: {template_path.name}")
             
             # Add all assets with their relative paths
             for abs_path, archive_path in assets:

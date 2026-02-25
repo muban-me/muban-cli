@@ -298,24 +298,26 @@ def format_template_list(templates: List[Dict[str, Any]], output_format: OutputF
     
     # For CSV, use raw numeric values for better Excel/data processing support
     if output_format == OutputFormat.CSV:
-        csv_headers = ["ID", "Name", "Author", "Size (bytes)", "Created"]
+        csv_headers = ["ID", "Name", "Author", "Type", "Size (bytes)", "Created"]
         for tpl in templates:
             rows.append([
                 tpl.get("id", "-"),
                 tpl.get("name", "-"),
                 tpl.get("author", "-"),
+                tpl.get("templateType", "-"),
                 tpl.get("fileSize", 0),  # Raw bytes for CSV
                 format_datetime(tpl.get("created")),
             ])
         print_csv(csv_headers, rows)
     else:
-        headers = ["ID", "Name", "Author", "Size", "Created"]
+        headers = ["ID", "Name", "Author", "Type", "Size", "Created"]
         for tpl in templates:
             if truncate_length > 0:
                 rows.append([
                     truncate_string(tpl.get("id", "-"), 36),
                     truncate_string(tpl.get("name", "-"), truncate_length),
                     truncate_string(tpl.get("author", "-"), truncate_length),
+                    tpl.get("templateType", "-"),
                     format_file_size(tpl.get("fileSize")),
                     format_datetime(tpl.get("created")),
                 ])
@@ -324,6 +326,7 @@ def format_template_list(templates: List[Dict[str, Any]], output_format: OutputF
                     tpl.get("id", "-"),
                     tpl.get("name", "-"),
                     tpl.get("author", "-"),
+                    tpl.get("templateType", "-"),
                     format_file_size(tpl.get("fileSize")),
                     format_datetime(tpl.get("created")),
                 ])

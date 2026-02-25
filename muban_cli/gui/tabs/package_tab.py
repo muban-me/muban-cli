@@ -1,5 +1,5 @@
 """
-Package Tab - JRXML template packaging with dependencies.
+Package Tab - Template packaging (JRXML/DOCX) with dependencies.
 """
 
 import logging
@@ -44,7 +44,7 @@ class PackageWorker(QThread):
 
     def __init__(
         self,
-        jrxml_path: Path,
+        template_path: Path,
         output_path: Optional[Path],
         fonts: List[FontSpec],
         reports_dir_param: str,
@@ -52,7 +52,7 @@ class PackageWorker(QThread):
         fonts_xml_path: Optional[Path] = None,
     ):
         super().__init__()
-        self.jrxml_path = jrxml_path
+        self.template_path = template_path
         self.output_path = output_path
         self.fonts = fonts
         self.reports_dir_param = reports_dir_param
@@ -63,7 +63,7 @@ class PackageWorker(QThread):
         try:
             packager = JRXMLPackager(reports_dir_param=self.reports_dir_param)
             result = packager.package(
-                self.jrxml_path,
+                self.template_path,
                 self.output_path,
                 dry_run=self.dry_run,
                 fonts=self.fonts,
@@ -102,7 +102,7 @@ class UploadWorker(QThread):
 
 
 class PackageTab(QWidget):
-    """Tab for packaging JRXML templates."""
+    """Tab for packaging JRXML/DOCX templates."""
 
     def __init__(self):
         super().__init__()
@@ -126,15 +126,15 @@ class PackageTab(QWidget):
         file_group = QGroupBox("Template File")
         file_layout = QFormLayout(file_group)
 
-        # JRXML file
-        jrxml_layout = QHBoxLayout()
-        self.jrxml_input = QLineEdit()
-        self.jrxml_input.setPlaceholderText("Select a JRXML template file...")
-        self.jrxml_browse_btn = QPushButton("Browse...")
-        self.jrxml_browse_btn.clicked.connect(self._browse_jrxml)
-        jrxml_layout.addWidget(self.jrxml_input)
-        jrxml_layout.addWidget(self.jrxml_browse_btn)
-        file_layout.addRow("JRXML File:", jrxml_layout)
+        # Template file (JRXML or DOCX)
+        template_layout = QHBoxLayout()
+        self.template_input = QLineEdit()
+        self.template_input.setPlaceholderText("Select a template file (.jrxml or .docx)...")
+        self.template_browse_btn = QPushButton("Browse...")
+        self.template_browse_btn.clicked.connect(self._browse_template)
+        template_layout.addWidget(self.template_input)
+        template_layout.addWidget(self.template_browse_btn)
+        file_layout.addRow("Template File:", template_layout)
 
         # Output file
         output_layout = QHBoxLayout()
@@ -148,6 +148,7 @@ class PackageTab(QWidget):
 
         # Reports dir param
         self.reports_dir_input = QLineEdit("REPORTS_DIR")
+        self.reports_dir_input.setToolTip("Path parameter name used in JRXML templates (ignored for DOCX)")
         file_layout.addRow("Reports Dir Param:", self.reports_dir_input)
 
         top_layout.addWidget(file_group)
@@ -243,16 +244,16 @@ class PackageTab(QWidget):
 
         layout.addWidget(splitter)
 
-    def _browse_jrxml(self):
-        """Browse for JRXML file."""
+    def _browse_template(self):
+        """Browse for template file (JRXML or DOCX)."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select JRXML Template",
+            "Select Template File",
             "",
-            "JRXML Files (*.jrxml);;All Files (*)",
+            "Template Files (*.jrxml *.docx);;JRXML Files (*.jrxml);;DOCX Files (*.docx);;All Files (*)",
         )
         if file_path:
-            self.jrxml_input.setText(file_path)
+            self.template_input.setText(file_path)
             # Auto-set output path
             if not self.output_input.text():
                 output = Path(file_path).with_suffix(".zip")
@@ -338,14 +339,14 @@ class PackageTab(QWidget):
 
     def _run_package(self):
         """Run the packaging operation."""
-        jrxml_path = self.jrxml_input.text().strip()
-        if not jrxml_path:
-            QMessageBox.warning(self, "Error", "Please select a JRXML file.")
+        template_path = self.template_input.text().strip()
+        if not template_path:
+            QMessageBox.warning(self, "Error", "Please select a template file (.jrxml or .docx).")
             return
 
-        jrxml_path = Path(jrxml_path)
-        if not jrxml_path.exists():
-            QMessageBox.warning(self, "Error", f"File not found: {jrxml_path}")
+        template_path = Path(template_path)
+        if not template_path.exists():
+            QMessageBox.warning(self, "Error", f"File not found: {template_path}")
             return
 
         output_path = self.output_input.text().strip()
@@ -369,7 +370,7 @@ class PackageTab(QWidget):
 
         # Run in worker thread
         self.worker = PackageWorker(
-            jrxml_path,
+            template_path,
             output_path,
             self._fonts.copy(),
             self.reports_dir_input.text(),
@@ -391,7 +392,7 @@ class PackageTab(QWidget):
                     self._log(f"\n✓ Dry run complete. Would create: {result.output_path}")
                 else:
                     self._log(f"\n✓ Package created: {result.output_path}")
-                self._log(f"  Main template: {result.main_jrxml}")
+                self._log(f"  Main template: {result.main_template} ({result.template_type})")
                 self._log(f"  Assets: {len(result.assets_included)} included, {len(result.assets_missing)} missing")
                 if result.fonts_included:
                     unique_font_files = len({f.file_path for f in result.fonts_included})
@@ -496,8 +497,8 @@ class PackageTab(QWidget):
 
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""
-        self.jrxml_input.setEnabled(enabled)
-        self.jrxml_browse_btn.setEnabled(enabled)
+        self.template_input.setEnabled(enabled)
+        self.template_browse_btn.setEnabled(enabled)
         self.output_input.setEnabled(enabled)
         self.output_browse_btn.setEnabled(enabled)
         self.reports_dir_input.setEnabled(enabled)
