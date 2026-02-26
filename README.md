@@ -11,7 +11,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates (JRXML and DOCX)
 - **Template Packaging** - Package JRXML or DOCX templates with optional fonts into deployable ZIP packages
-- **Document Generation** - Generate PDF, XLSX, DOCX, RTF, and HTML documents
+- **Document Generation** - Generate PDF, XLSX, DOCX, RTF, HTML, and TXT documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
 - **Audit & Monitoring** - Access audit logs and security dashboards (admin)
@@ -333,6 +333,7 @@ muban generate TEMPLATE_ID -p title="Report" -p year=2025 -p amount=15750.25
 muban generate TEMPLATE_ID -F xlsx -o report.xlsx
 muban generate TEMPLATE_ID -F docx -o report.docx
 muban generate TEMPLATE_ID -F html -o report.html
+muban generate TEMPLATE_ID -F txt -o report.txt
 
 # Using parameter file
 muban generate TEMPLATE_ID --params-file params.json
@@ -343,6 +344,10 @@ muban generate TEMPLATE_ID --data-file data.json
 # PDF options
 muban generate TEMPLATE_ID --pdf-pdfa PDF/A-1b --locale pl_PL
 muban generate TEMPLATE_ID --pdf-password secret123
+
+# TXT options
+muban generate TEMPLATE_ID -F txt --txt-page-width-chars 80 --txt-trim-line-right
+muban generate TEMPLATE_ID -F txt --txt-char-width 6.0 --txt-char-height 12.0
 
 # Output options
 muban generate TEMPLATE_ID -o ./output/report.pdf --filename "Sales_Report_Q4"
@@ -606,13 +611,14 @@ The GUI provides a tabbed interface with the following sections:
 
 #### **⚙️ Generate Tab**
 
-- Select template and output format (PDF, XLSX, DOCX, RTF, HTML)
+- Select template and output format (PDF, XLSX, DOCX, RTF, HTML, TXT)
 - Fill in template parameters with a dynamic form
 - Load parameters from JSON file
 - Provide JSON data sources
 - Configure export options:
   - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings
   - **HTML options**: Resource embedding, single-file output, custom CSS
+  - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem
 
 #### **🖥️ Server Info Tab**
@@ -843,51 +849,66 @@ flake8 muban_cli
 ```text
 muban-cli/
 ├── muban_cli/
-│   ├── __init__.py      # Package initialization, version info
-│   ├── __main__.py      # Entry point for python -m muban_cli
-│   ├── cli.py           # Main CLI entry point
-│   ├── api.py           # REST API client
-│   ├── auth.py          # Authentication (password + OAuth2)
-│   ├── config.py        # Configuration management
-│   ├── utils.py         # Utility functions (formatting, output)
-│   ├── exceptions.py    # Custom exceptions
-│   ├── py.typed         # PEP 561 marker
-│   ├── commands/        # Command modules
-│   │   ├── __init__.py  # Common options decorator
-│   │   ├── auth.py      # login, logout, whoami, refresh
-│   │   ├── templates.py # list, search, get, push, pull, delete
-│   │   ├── generate.py  # generate documents
-│   │   ├── async_ops.py # async job management
-│   │   ├── audit.py     # audit logs and monitoring
-│   │   ├── admin.py     # admin operations
-│   │   ├── users.py     # user management
-│   │   ├── resources.py # fonts, icc-profiles
-│   │   └── settings.py  # configure, config-clear
-│   └── gui/             # Graphical User Interface (optional)
+│   ├── __init__.py        # Package initialization, version info
+│   ├── __main__.py        # Entry point for python -m muban_cli
+│   ├── cli.py             # Main CLI entry point
+│   ├── api.py             # REST API client
+│   ├── auth.py            # Authentication (password + OAuth2)
+│   ├── config.py          # Configuration management
+│   ├── packager.py        # Template packager (JRXML/DOCX → ZIP)
+│   ├── utils.py           # Utility functions (formatting, output)
+│   ├── exceptions.py      # Custom exceptions
+│   ├── py.typed           # PEP 561 marker
+│   ├── commands/          # Command modules
+│   │   ├── __init__.py    # Common options decorator
+│   │   ├── auth.py        # login, logout, whoami, refresh
+│   │   ├── templates.py   # list, search, get, push, pull, delete
+│   │   ├── generate.py    # generate documents (PDF/XLSX/DOCX/RTF/HTML/TXT)
+│   │   ├── package.py     # package JRXML/DOCX templates
+│   │   ├── async_ops.py   # async job management
+│   │   ├── audit.py       # audit logs and monitoring
+│   │   ├── admin.py       # admin operations
+│   │   ├── users.py       # user management
+│   │   ├── resources.py   # fonts, icc-profiles
+│   │   └── settings.py    # configure, config-clear
+│   └── gui/               # Graphical User Interface (optional)
 │       ├── __init__.py
-│       ├── main.py      # GUI entry point
-│       ├── main_window.py
-│       ├── tabs/        # Tab widgets
-│       │   ├── package_tab.py
-│       │   ├── templates_tab.py
-│       │   ├── generate_tab.py
-│       │   ├── server_info_tab.py
-│       │   └── settings_tab.py
-│       ├── dialogs/     # Dialog windows
-│       └── resources/   # Icons and images
-├── tests/               # Test suite
-│   ├── conftest.py      # Test fixtures
+│       ├── main.py        # GUI entry point
+│       ├── main_window.py # Main window with tab container
+│       ├── error_dialog.py # Error dialog with copy support
+│       ├── icons.py       # Icon generation helpers
+│       ├── tabs/          # Tab widgets
+│       │   ├── __init__.py
+│       │   ├── package_tab.py     # Template packaging
+│       │   ├── templates_tab.py   # Template browsing
+│       │   ├── generate_tab.py    # Document generation
+│       │   ├── server_info_tab.py # Server info & fonts
+│       │   └── settings_tab.py    # Configuration
+│       ├── dialogs/       # Dialog windows
+│       │   ├── __init__.py
+│       │   ├── data_editor_dialog.py    # JSON data editor
+│       │   ├── export_options_dialog.py # PDF/HTML/TXT export options
+│       │   ├── font_dialog.py          # Multi-face font config
+│       │   └── upload_dialog.py        # Template upload
+│       └── resources/     # Icons and images
+│           └── logo.png
+├── tests/                 # Test suite
+│   ├── __init__.py
+│   ├── conftest.py        # Test fixtures
 │   ├── test_api.py
 │   ├── test_auth.py
 │   ├── test_cli_simple.py
 │   ├── test_commands.py
 │   ├── test_config.py
 │   ├── test_exceptions.py
+│   ├── test_gui.py        # GUI widget tests (pytest-qt)
+│   ├── test_packager.py   # Packager tests
 │   └── test_utils.py
-├── docs/                # Documentation
-├── pyproject.toml       # Project configuration
-├── LICENSE              # MIT License
-└── README.md            # This file
+├── docs/                  # Documentation & API spec
+├── .gitlab-ci.yml         # CI/CD pipeline
+├── pyproject.toml         # Project configuration
+├── LICENSE                # MIT License
+└── README.md              # This file
 ```
 
 ## License

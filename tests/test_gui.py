@@ -654,14 +654,17 @@ class TestExportOptionsDialog:
         assert dialog.windowTitle() == "Export Options"
 
     def test_export_options_dialog_has_tabs(self, qtbot):
-        """Test export options dialog has PDF/HTML tabs."""
+        """Test export options dialog has PDF/HTML/TXT tabs."""
         from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
         
         dialog = ExportOptionsDialog()
         qtbot.addWidget(dialog)
         
         assert hasattr(dialog, 'tabs')
-        assert dialog.tabs.count() >= 2
+        assert dialog.tabs.count() == 3
+        assert dialog.tabs.tabText(0) == "PDF"
+        assert dialog.tabs.tabText(1) == "HTML"
+        assert dialog.tabs.tabText(2) == "TXT"
 
     def test_export_options_dialog_with_icc_profiles(self, qtbot):
         """Test export options dialog with ICC profiles."""
@@ -700,6 +703,60 @@ class TestExportOptionsDialog:
         # Should be able to get options
         pdf_opts = dialog.get_pdf_options()
         assert isinstance(pdf_opts, dict)
+
+    def test_export_options_dialog_txt_defaults(self, qtbot):
+        """Test TXT tab default values return None (no custom options)."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        dialog = ExportOptionsDialog()
+        qtbot.addWidget(dialog)
+
+        # Default values should produce None (nothing customized)
+        txt_opts = dialog.get_txt_options()
+        assert txt_opts is None
+
+    def test_export_options_dialog_txt_options(self, qtbot):
+        """Test TXT export options are read correctly."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        txt_options = {
+            "characterWidth": 6.0,
+            "characterHeight": 12.0,
+            "pageWidthInChars": 80,
+            "pageHeightInChars": 60,
+            "trimLineRight": True,
+            "lineSeparator": "\\n",
+            "pageSeparator": "---",
+        }
+        dialog = ExportOptionsDialog(txt_options=txt_options)
+        qtbot.addWidget(dialog)
+
+        assert dialog.txt_char_width.value() == 6.0
+        assert dialog.txt_char_height.value() == 12.0
+        assert dialog.txt_page_width.value() == 80
+        assert dialog.txt_page_height.value() == 60
+        assert dialog.txt_trim_line_right.isChecked()
+
+        opts = dialog.get_txt_options()
+        assert opts is not None
+        assert opts["characterWidth"] == 6.0
+        assert opts["pageWidthInChars"] == 80
+        assert opts["trimLineRight"] is True
+
+    def test_export_options_dialog_txt_summary(self, qtbot):
+        """Test TXT summary label generation."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        dialog = ExportOptionsDialog()
+        qtbot.addWidget(dialog)
+
+        assert dialog.get_txt_summary() == "Default"
+
+        dialog.txt_page_width.setValue(80)
+        dialog.txt_trim_line_right.setChecked(True)
+        summary = dialog.get_txt_summary()
+        assert "80 cols" in summary
+        assert "Trim" in summary
 
 
 class TestDataEditorDialog:

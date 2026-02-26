@@ -54,6 +54,7 @@ class GenerateWorker(QThread):
         data: Optional[Dict[str, Any]] = None,
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
+        txt_export_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.client = client
@@ -64,6 +65,7 @@ class GenerateWorker(QThread):
         self.data = data
         self.pdf_export_options = pdf_export_options
         self.html_export_options = html_export_options
+        self.txt_export_options = txt_export_options
 
     def run(self):
         try:
@@ -77,6 +79,7 @@ class GenerateWorker(QThread):
                 data=self.data,
                 pdf_export_options=self.pdf_export_options,
                 html_export_options=self.html_export_options,
+                txt_export_options=self.txt_export_options,
             )
             self.finished.emit(str(self.output_path))
         except Exception as e:
@@ -186,6 +189,7 @@ class GenerateTab(QWidget):
         self._icc_profiles: List[str] = []
         self._pdf_options: Dict[str, Any] = {}
         self._html_options: Dict[str, Any] = {}
+        self._txt_options: Dict[str, Any] = {}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -316,7 +320,7 @@ class GenerateTab(QWidget):
 
         # Format
         self.format_combo = QComboBox()
-        self.format_combo.addItems(["pdf", "xlsx", "docx", "rtf", "html"])
+        self.format_combo.addItems(["pdf", "xlsx", "docx", "rtf", "html", "txt"])
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         output_layout.addRow("Format:", self.format_combo)
 
@@ -335,7 +339,7 @@ class GenerateTab(QWidget):
         # Export options button
         export_layout = QHBoxLayout()
         self.export_options_btn = QPushButton("Export Options...")
-        self.export_options_btn.setToolTip("Configure PDF/HTML export options")
+        self.export_options_btn.setToolTip("Configure PDF/HTML/TXT export options")
         self.export_options_btn.clicked.connect(self._open_export_options_dialog)
         export_layout.addWidget(self.export_options_btn)
         self.export_summary_label = QLabel("Default settings")
@@ -630,7 +634,7 @@ class GenerateTab(QWidget):
         """Show/hide export options based on selected format."""
         format = self.format_combo.currentText()
         # Only show export options button for formats that have options
-        show = format in ("pdf", "html")
+        show = format in ("pdf", "html", "txt")
         self.export_options_btn.setVisible(show)
         self.export_summary_label.setVisible(show)
         self._update_export_summary()
@@ -644,6 +648,7 @@ class GenerateTab(QWidget):
             "docx": "Word Files (*.docx)",
             "rtf": "RTF Files (*.rtf)",
             "html": "HTML Files (*.html)",
+            "txt": "Text Files (*.txt)",
         }
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -684,6 +689,10 @@ class GenerateTab(QWidget):
     def _get_html_options(self) -> Optional[Dict[str, Any]]:
         """Get HTML export options."""
         return self._html_options if self._html_options else None
+
+    def _get_txt_options(self) -> Optional[Dict[str, Any]]:
+        """Get TXT export options."""
+        return self._txt_options if self._txt_options else None
 
     def _update_data_preview(self):
         """Update the data preview label with a summary."""
@@ -737,15 +746,19 @@ class GenerateTab(QWidget):
             parent=self,
             pdf_options=self._pdf_options,
             html_options=self._html_options,
+            txt_options=self._txt_options,
             icc_profiles=self._icc_profiles,
         )
         # Switch to the appropriate tab
         if format == "html":
             dialog.tabs.setCurrentIndex(1)
+        elif format == "txt":
+            dialog.tabs.setCurrentIndex(2)
 
         if dialog.exec():
             self._pdf_options = dialog.get_pdf_options() or {}
             self._html_options = dialog.get_html_options() or {}
+            self._txt_options = dialog.get_txt_options() or {}
             self._update_export_summary()
 
     def _update_export_summary(self):
@@ -777,6 +790,25 @@ class GenerateTab(QWidget):
                     parts.append("Web-safe")
                 if self._html_options.get("removeEmptySpace"):
                     parts.append("Compact")
+                if parts:
+                    self.export_summary_label.setText(", ".join(parts))
+                else:
+                    self.export_summary_label.setText("Custom settings")
+            else:
+                self.export_summary_label.setText("Default settings")
+        elif format == "txt":
+            if self._txt_options:
+                parts = []
+                if self._txt_options.get("characterWidth"):
+                    parts.append(f"W:{self._txt_options['characterWidth']}")
+                if self._txt_options.get("characterHeight"):
+                    parts.append(f"H:{self._txt_options['characterHeight']}")
+                if self._txt_options.get("pageWidthInChars"):
+                    parts.append(f"{self._txt_options['pageWidthInChars']} cols")
+                if self._txt_options.get("pageHeightInChars"):
+                    parts.append(f"{self._txt_options['pageHeightInChars']} rows")
+                if self._txt_options.get("trimLineRight"):
+                    parts.append("Trim")
                 if parts:
                     self.export_summary_label.setText(", ".join(parts))
                 else:
@@ -820,6 +852,7 @@ class GenerateTab(QWidget):
         format = self.format_combo.currentText()
         pdf_options = self._get_pdf_options() if format == "pdf" else None
         html_options = self._get_html_options() if format == "html" else None
+        txt_options = self._get_txt_options() if format == "txt" else None
 
         self.generate_worker = GenerateWorker(
             client,
@@ -830,6 +863,7 @@ class GenerateTab(QWidget):
             data,
             pdf_options,
             html_options,
+            txt_options,
         )
         self.generate_worker.finished.connect(self._on_generate_finished)
         self.generate_worker.error.connect(self._on_generate_error)
