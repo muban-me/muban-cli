@@ -565,6 +565,7 @@ class MubanAPIClient:
         document_locale: Optional[str] = None,
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
+        txt_export_options: Optional[Dict[str, Any]] = None,
         ignore_pagination: bool = False
     ) -> Path:
         """
@@ -572,7 +573,7 @@ class MubanAPIClient:
         
         Args:
             template_id: Template UUID
-            output_format: Output format (pdf, xlsx, docx, rtf, html)
+            output_format: Output format (pdf, xlsx, docx, rtf, html, txt)
             parameters: List of parameter name/value pairs
             output_path: Optional output path
             filename: Optional custom filename
@@ -580,6 +581,7 @@ class MubanAPIClient:
             document_locale: Optional locale (e.g., 'en_US', 'pl_PL')
             pdf_export_options: PDF-specific options
             html_export_options: HTML-specific options
+            txt_export_options: TXT-specific options
             ignore_pagination: Whether to ignore pagination
         
         Returns:
@@ -600,6 +602,8 @@ class MubanAPIClient:
             request_data["pdfExportOptions"] = pdf_export_options
         if html_export_options:
             request_data["htmlExportOptions"] = html_export_options
+        if txt_export_options:
+            request_data["txtExportOptions"] = txt_export_options
         if ignore_pagination:
             request_data["ignorePagination"] = ignore_pagination
         

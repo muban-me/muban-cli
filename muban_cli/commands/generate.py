@@ -29,7 +29,7 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option(
         '--output-format', '-F',
         'doc_format',
-        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html']),
+        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html', 'txt']),
         default='pdf',
         help='Output document format'
     )
@@ -45,6 +45,11 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option('--pdf-pdfa', type=click.Choice(['PDF/A-1a', 'PDF/A-1b', 'PDF/A-2a', 'PDF/A-2b', 'PDF/A-3a', 'PDF/A-3b']), help='PDF/A conformance')
     @click.option('--pdf-password', help='PDF user password')
     @click.option('--pdf-owner-password', help='PDF owner password')
+    @click.option('--txt-char-width', type=float, help='TXT character cell width in pixels (default: 8.0)')
+    @click.option('--txt-char-height', type=float, help='TXT character cell height in pixels (default: 13.948)')
+    @click.option('--txt-page-width-chars', type=int, help='TXT page width in characters (overrides char width)')
+    @click.option('--txt-page-height-chars', type=int, help='TXT page height in character rows (overrides char height)')
+    @click.option('--txt-trim-line-right', is_flag=True, help='Trim trailing whitespace from TXT lines')
     @pass_context
     @require_config
     def generate_document(
@@ -66,7 +71,12 @@ def register_generate_commands(cli: click.Group) -> None:
         no_pagination: bool,
         pdf_pdfa: Optional[str],
         pdf_password: Optional[str],
-        pdf_owner_password: Optional[str]
+        pdf_owner_password: Optional[str],
+        txt_char_width: Optional[float],
+        txt_char_height: Optional[float],
+        txt_page_width_chars: Optional[int],
+        txt_page_height_chars: Optional[int],
+        txt_trim_line_right: bool,
     ):
         """
         Generate a document from a template.
@@ -77,6 +87,7 @@ def register_generate_commands(cli: click.Group) -> None:
           muban generate abc123 --params-file params.json -F xlsx
           muban generate abc123 --data-file data.json -o report.pdf
           muban generate abc123 --pdf-pdfa PDF/A-1b --locale pl_PL
+          muban generate abc123 -F txt --txt-page-width-chars 80 --txt-trim-line-right
           muban generate abc123 -b '{"parameters":[{"name":"title","value":"Test"}]}'
           muban generate abc123 -B request.json -F pdf
         """
@@ -170,6 +181,21 @@ def register_generate_commands(cli: click.Group) -> None:
             if pdf_owner_password:
                 pdf_options['ownerPassword'] = pdf_owner_password
         
+        # Build TXT options
+        txt_options = None
+        if any([txt_char_width, txt_char_height, txt_page_width_chars, txt_page_height_chars, txt_trim_line_right]):
+            txt_options = {}
+            if txt_char_width is not None:
+                txt_options['characterWidth'] = txt_char_width
+            if txt_char_height is not None:
+                txt_options['characterHeight'] = txt_char_height
+            if txt_page_width_chars is not None:
+                txt_options['pageWidthInChars'] = txt_page_width_chars
+            if txt_page_height_chars is not None:
+                txt_options['pageHeightInChars'] = txt_page_height_chars
+            if txt_trim_line_right:
+                txt_options['trimLineRight'] = True
+        
         try:
             with MubanAPIClient(ctx.config_manager.get()) as client:
                 if not quiet:
@@ -184,6 +210,7 @@ def register_generate_commands(cli: click.Group) -> None:
                     data=data,
                     document_locale=locale,
                     pdf_export_options=pdf_options,
+                    txt_export_options=txt_options,
                     ignore_pagination=no_pagination
                 )
                 

@@ -1,5 +1,5 @@
 """
-Export Options Dialog - Configure PDF and HTML export options.
+Export Options Dialog - Configure PDF, HTML, and TXT export options.
 """
 
 from typing import Optional, Dict, Any, List
@@ -16,22 +16,26 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
     QGroupBox,
+    QDoubleSpinBox,
+    QSpinBox,
 )
 
 
 class ExportOptionsDialog(QDialog):
-    """Dialog for configuring PDF and HTML export options."""
+    """Dialog for configuring PDF, HTML, and TXT export options."""
 
     def __init__(
         self,
         parent=None,
         pdf_options: Optional[Dict[str, Any]] = None,
         html_options: Optional[Dict[str, Any]] = None,
+        txt_options: Optional[Dict[str, Any]] = None,
         icc_profiles: Optional[List[str]] = None,
     ):
         super().__init__(parent)
         self._pdf_options = pdf_options or {}
         self._html_options = html_options or {}
+        self._txt_options = txt_options or {}
         self._icc_profiles = icc_profiles or []
         self.setWindowTitle("Export Options")
         self.setMinimumWidth(500)
@@ -182,6 +186,92 @@ class ExportOptionsDialog(QDialog):
         html_layout.addStretch()
         self.tabs.addTab(html_widget, "HTML")
 
+        # TXT Tab
+        txt_widget = QWidget()
+        txt_layout = QVBoxLayout(txt_widget)
+
+        # Character Grid Group
+        grid_group = QGroupBox("Character Grid")
+        grid_layout = QFormLayout(grid_group)
+
+        self.txt_char_width = QDoubleSpinBox()
+        self.txt_char_width.setRange(0.1, 100.0)
+        self.txt_char_width.setDecimals(3)
+        self.txt_char_width.setValue(8.0)
+        self.txt_char_width.setSpecialValueText("")
+        self.txt_char_width.setToolTip(
+            "Width of a single character cell in pixels. "
+            "Smaller values produce wider output."
+        )
+        grid_layout.addRow("Character Width (px):", self.txt_char_width)
+
+        self.txt_char_height = QDoubleSpinBox()
+        self.txt_char_height.setRange(0.1, 100.0)
+        self.txt_char_height.setDecimals(3)
+        self.txt_char_height.setValue(13.948)
+        self.txt_char_height.setSpecialValueText("")
+        self.txt_char_height.setToolTip(
+            "Height of a single character cell in pixels. "
+            "Smaller values produce taller output."
+        )
+        grid_layout.addRow("Character Height (px):", self.txt_char_height)
+        txt_layout.addWidget(grid_group)
+
+        # Page Size Group
+        page_group = QGroupBox("Page Size (in characters)")
+        page_layout = QFormLayout(page_group)
+
+        self.txt_page_width = QSpinBox()
+        self.txt_page_width.setRange(0, 10000)
+        self.txt_page_width.setSpecialValueText("Auto")
+        self.txt_page_width.setValue(0)
+        self.txt_page_width.setToolTip(
+            "Page width in characters. When set, character width is computed "
+            "automatically. Set to 0 for auto."
+        )
+        page_layout.addRow("Page Width (chars):", self.txt_page_width)
+
+        self.txt_page_height = QSpinBox()
+        self.txt_page_height.setRange(0, 10000)
+        self.txt_page_height.setSpecialValueText("Auto")
+        self.txt_page_height.setValue(0)
+        self.txt_page_height.setToolTip(
+            "Page height in character rows. When set, character height is "
+            "computed automatically. Set to 0 for auto."
+        )
+        page_layout.addRow("Page Height (rows):", self.txt_page_height)
+        txt_layout.addWidget(page_group)
+
+        # Formatting Group
+        fmt_group = QGroupBox("Formatting")
+        fmt_layout = QVBoxLayout(fmt_group)
+
+        fmt_row = QHBoxLayout()
+        self.txt_trim_line_right = QCheckBox("Trim Trailing Whitespace")
+        self.txt_trim_line_right.setChecked(False)
+        self.txt_trim_line_right.setToolTip(
+            "Trim trailing whitespace from each line. Reduces file size for sparse reports."
+        )
+        fmt_row.addWidget(self.txt_trim_line_right)
+        fmt_row.addStretch()
+        fmt_layout.addLayout(fmt_row)
+
+        sep_form = QFormLayout()
+        self.txt_line_separator = QLineEdit()
+        self.txt_line_separator.setPlaceholderText("System default")
+        self.txt_line_separator.setToolTip("Line separator string (e.g., \\n). Leave empty for system default.")
+        sep_form.addRow("Line Separator:", self.txt_line_separator)
+
+        self.txt_page_separator = QLineEdit()
+        self.txt_page_separator.setPlaceholderText("None")
+        self.txt_page_separator.setToolTip("String inserted between pages (e.g., --- Page Break ---).")
+        sep_form.addRow("Page Separator:", self.txt_page_separator)
+        fmt_layout.addLayout(sep_form)
+        txt_layout.addWidget(fmt_group)
+
+        txt_layout.addStretch()
+        self.tabs.addTab(txt_widget, "TXT")
+
         # Buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -240,6 +330,23 @@ class ExportOptionsDialog(QDialog):
             self.html_wrap_break_word.setChecked(html["wrapBreakWord"])
         if "ignorePageMargins" in html:
             self.html_ignore_margins.setChecked(html["ignorePageMargins"])
+
+        # TXT options
+        txt = self._txt_options
+        if "characterWidth" in txt:
+            self.txt_char_width.setValue(txt["characterWidth"])
+        if "characterHeight" in txt:
+            self.txt_char_height.setValue(txt["characterHeight"])
+        if txt.get("pageWidthInChars"):
+            self.txt_page_width.setValue(txt["pageWidthInChars"])
+        if txt.get("pageHeightInChars"):
+            self.txt_page_height.setValue(txt["pageHeightInChars"])
+        if "trimLineRight" in txt:
+            self.txt_trim_line_right.setChecked(txt["trimLineRight"])
+        if txt.get("lineSeparator"):
+            self.txt_line_separator.setText(txt["lineSeparator"])
+        if txt.get("pageSeparator"):
+            self.txt_page_separator.setText(txt["pageSeparator"])
 
     def update_icc_profiles(self, profiles: List[str]):
         """Update ICC profiles list."""
@@ -319,4 +426,52 @@ class ExportOptionsDialog(QDialog):
             parts.append("Web-safe")
         if self.html_remove_empty_space.isChecked():
             parts.append("Compact")
+        return ", ".join(parts) if parts else "Default"
+
+    def get_txt_options(self) -> Optional[Dict[str, Any]]:
+        """Get TXT export options."""
+        options: Dict[str, Any] = {}
+
+        char_w = self.txt_char_width.value()
+        if char_w != 8.0:
+            options["characterWidth"] = char_w
+
+        char_h = self.txt_char_height.value()
+        if char_h != 13.948:
+            options["characterHeight"] = char_h
+
+        page_w = self.txt_page_width.value()
+        if page_w > 0:
+            options["pageWidthInChars"] = page_w
+
+        page_h = self.txt_page_height.value()
+        if page_h > 0:
+            options["pageHeightInChars"] = page_h
+
+        if self.txt_trim_line_right.isChecked():
+            options["trimLineRight"] = True
+
+        line_sep = self.txt_line_separator.text()
+        if line_sep:
+            options["lineSeparator"] = line_sep
+
+        page_sep = self.txt_page_separator.text()
+        if page_sep:
+            options["pageSeparator"] = page_sep
+
+        return options if options else None
+
+    def get_txt_summary(self) -> str:
+        """Get a brief summary of TXT options."""
+        parts = []
+        if self.txt_page_width.value() > 0:
+            parts.append(f"{self.txt_page_width.value()} cols")
+        if self.txt_page_height.value() > 0:
+            parts.append(f"{self.txt_page_height.value()} rows")
+        if self.txt_char_width.value() != 8.0:
+            parts.append(f"W:{self.txt_char_width.value()}")
+        if self.txt_char_height.value() != 13.948:
+            parts.append(f"H:{self.txt_char_height.value()}")
+        if self.txt_trim_line_right.isChecked():
+            parts.append("Trim")
         return ", ".join(parts) if parts else "Default"
