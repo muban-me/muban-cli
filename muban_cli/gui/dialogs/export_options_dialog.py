@@ -31,12 +31,16 @@ class ExportOptionsDialog(QDialog):
         html_options: Optional[Dict[str, Any]] = None,
         txt_options: Optional[Dict[str, Any]] = None,
         icc_profiles: Optional[List[str]] = None,
+        document_locale: Optional[str] = None,
+        ignore_pagination: bool = False,
     ):
         super().__init__(parent)
         self._pdf_options = pdf_options or {}
         self._html_options = html_options or {}
         self._txt_options = txt_options or {}
         self._icc_profiles = icc_profiles or []
+        self._document_locale = document_locale or ""
+        self._ignore_pagination = ignore_pagination
         self.setWindowTitle("Export Options")
         self.setMinimumWidth(500)
         self._setup_ui()
@@ -48,6 +52,40 @@ class ExportOptionsDialog(QDialog):
         # Tab widget
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
+
+        # General Tab (applies to all formats)
+        general_widget = QWidget()
+        general_layout = QVBoxLayout(general_widget)
+
+        # Localization Group
+        locale_group = QGroupBox("Localization")
+        locale_layout = QFormLayout(locale_group)
+
+        self.locale_input = QLineEdit()
+        self.locale_input.setPlaceholderText("e.g., en_US, pl_PL, de_DE")
+        self.locale_input.setToolTip(
+            "Document locale for internationalization and formatting.\n"
+            "Affects number, date, and currency formatting.\n"
+            "Examples: en_US, pl_PL, de_DE, fr_FR"
+        )
+        locale_layout.addRow("Document Locale:", self.locale_input)
+        general_layout.addWidget(locale_group)
+
+        # Pagination Group
+        pagination_group = QGroupBox("Pagination")
+        pagination_layout = QVBoxLayout(pagination_group)
+
+        self.ignore_pagination_checkbox = QCheckBox("Ignore Pagination")
+        self.ignore_pagination_checkbox.setToolTip(
+            "When enabled, ignores page breaks and renders the document\n"
+            "as continuous content. Useful for single-page exports or\n"
+            "web-friendly output (especially HTML)."
+        )
+        pagination_layout.addWidget(self.ignore_pagination_checkbox)
+        general_layout.addWidget(pagination_group)
+
+        general_layout.addStretch()
+        self.tabs.addTab(general_widget, "General")
 
         # PDF Tab
         pdf_widget = QWidget()
@@ -282,6 +320,11 @@ class ExportOptionsDialog(QDialog):
 
     def _load_values(self):
         """Load values from stored options."""
+        # General options
+        if self._document_locale:
+            self.locale_input.setText(self._document_locale)
+        self.ignore_pagination_checkbox.setChecked(self._ignore_pagination)
+
         # PDF options
         pdf = self._pdf_options
         if pdf.get("pdfaConformance"):
@@ -360,6 +403,25 @@ class ExportOptionsDialog(QDialog):
             idx = self.icc_combo.findText(current)
             if idx >= 0:
                 self.icc_combo.setCurrentIndex(idx)
+
+    def get_document_locale(self) -> Optional[str]:
+        """Get document locale."""
+        locale = self.locale_input.text().strip()
+        return locale if locale else None
+
+    def get_ignore_pagination(self) -> bool:
+        """Get ignore pagination flag."""
+        return self.ignore_pagination_checkbox.isChecked()
+
+    def get_general_summary(self) -> str:
+        """Get a brief summary of general options."""
+        parts = []
+        locale = self.locale_input.text().strip()
+        if locale:
+            parts.append(f"Locale: {locale}")
+        if self.ignore_pagination_checkbox.isChecked():
+            parts.append("No pagination")
+        return ", ".join(parts) if parts else ""
 
     def get_pdf_options(self) -> Optional[Dict[str, Any]]:
         """Get PDF export options."""

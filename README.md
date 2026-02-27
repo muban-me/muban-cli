@@ -345,6 +345,11 @@ muban generate TEMPLATE_ID --data-file data.json
 muban generate TEMPLATE_ID --pdf-pdfa PDF/A-1b --locale pl_PL
 muban generate TEMPLATE_ID --pdf-password secret123
 
+# General export options
+muban generate TEMPLATE_ID --locale de_DE         # Document locale for formatting
+muban generate TEMPLATE_ID --no-pagination        # Continuous output without page breaks
+muban generate TEMPLATE_ID --locale en_US --no-pagination -F html  # Combine options
+
 # TXT options
 muban generate TEMPLATE_ID -F txt --txt-page-width-chars 80 --txt-trim-line-right
 muban generate TEMPLATE_ID -F txt --txt-char-width 6.0 --txt-char-height 12.0
@@ -616,6 +621,7 @@ The GUI provides a tabbed interface with the following sections:
 - Load parameters from JSON file
 - Provide JSON data sources
 - Configure export options:
+  - **General options**: Document locale for number/date/currency formatting, ignore pagination for continuous output
   - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings
   - **HTML options**: Resource embedding, single-file output, custom CSS
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming

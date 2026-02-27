@@ -55,6 +55,8 @@ class GenerateWorker(QThread):
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
         txt_export_options: Optional[Dict[str, Any]] = None,
+        document_locale: Optional[str] = None,
+        ignore_pagination: bool = False,
     ):
         super().__init__()
         self.client = client
@@ -66,6 +68,8 @@ class GenerateWorker(QThread):
         self.pdf_export_options = pdf_export_options
         self.html_export_options = html_export_options
         self.txt_export_options = txt_export_options
+        self.document_locale = document_locale
+        self.ignore_pagination = ignore_pagination
 
     def run(self):
         try:
@@ -80,6 +84,8 @@ class GenerateWorker(QThread):
                 pdf_export_options=self.pdf_export_options,
                 html_export_options=self.html_export_options,
                 txt_export_options=self.txt_export_options,
+                document_locale=self.document_locale,
+                ignore_pagination=self.ignore_pagination,
             )
             self.finished.emit(str(self.output_path))
         except Exception as e:
@@ -190,6 +196,8 @@ class GenerateTab(QWidget):
         self._pdf_options: Dict[str, Any] = {}
         self._html_options: Dict[str, Any] = {}
         self._txt_options: Dict[str, Any] = {}
+        self._document_locale: Optional[str] = None
+        self._ignore_pagination: bool = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -748,73 +756,73 @@ class GenerateTab(QWidget):
             html_options=self._html_options,
             txt_options=self._txt_options,
             icc_profiles=self._icc_profiles,
+            document_locale=self._document_locale,
+            ignore_pagination=self._ignore_pagination,
         )
-        # Switch to the appropriate tab
-        if format == "html":
+        # Switch to the appropriate tab (General is tab 0, PDF is 1, HTML is 2, TXT is 3)
+        if format == "pdf":
             dialog.tabs.setCurrentIndex(1)
-        elif format == "txt":
+        elif format == "html":
             dialog.tabs.setCurrentIndex(2)
+        elif format == "txt":
+            dialog.tabs.setCurrentIndex(3)
 
         if dialog.exec():
             self._pdf_options = dialog.get_pdf_options() or {}
             self._html_options = dialog.get_html_options() or {}
             self._txt_options = dialog.get_txt_options() or {}
+            self._document_locale = dialog.get_document_locale()
+            self._ignore_pagination = dialog.get_ignore_pagination()
             self._update_export_summary()
 
     def _update_export_summary(self):
         """Update the export options summary label."""
         format = self.format_combo.currentText()
+        
+        # Build general options parts (apply to all formats)
+        general_parts = []
+        if self._document_locale:
+            general_parts.append(f"Locale: {self._document_locale}")
+        if self._ignore_pagination:
+            general_parts.append("No pagination")
+        
+        format_parts = []
+        
         if format == "pdf":
             if self._pdf_options:
-                parts = []
                 if self._pdf_options.get("pdfaConformance"):
-                    parts.append(self._pdf_options["pdfaConformance"])
+                    format_parts.append(self._pdf_options["pdfaConformance"])
                 if self._pdf_options.get("iccProfile"):
-                    parts.append(f"ICC: {self._pdf_options['iccProfile']}")
+                    format_parts.append(f"ICC: {self._pdf_options['iccProfile']}")
                 if self._pdf_options.get("userPassword") or self._pdf_options.get("ownerPassword"):
-                    parts.append("Encrypted")
-                if parts:
-                    self.export_summary_label.setText(", ".join(parts))
-                else:
-                    self.export_summary_label.setText("Custom settings")
-            else:
-                self.export_summary_label.setText("Default settings")
+                    format_parts.append("Encrypted")
         elif format == "html":
             if self._html_options:
-                parts = []
                 if not self._html_options.get("embedFonts", True):
-                    parts.append("No fonts")
+                    format_parts.append("No fonts")
                 if not self._html_options.get("embedImages", True):
-                    parts.append("No images")
+                    format_parts.append("No images")
                 if self._html_options.get("useWebSafeFonts"):
-                    parts.append("Web-safe")
+                    format_parts.append("Web-safe")
                 if self._html_options.get("removeEmptySpace"):
-                    parts.append("Compact")
-                if parts:
-                    self.export_summary_label.setText(", ".join(parts))
-                else:
-                    self.export_summary_label.setText("Custom settings")
-            else:
-                self.export_summary_label.setText("Default settings")
+                    format_parts.append("Compact")
         elif format == "txt":
             if self._txt_options:
-                parts = []
                 if self._txt_options.get("characterWidth"):
-                    parts.append(f"W:{self._txt_options['characterWidth']}")
+                    format_parts.append(f"W:{self._txt_options['characterWidth']}")
                 if self._txt_options.get("characterHeight"):
-                    parts.append(f"H:{self._txt_options['characterHeight']}")
+                    format_parts.append(f"H:{self._txt_options['characterHeight']}")
                 if self._txt_options.get("pageWidthInChars"):
-                    parts.append(f"{self._txt_options['pageWidthInChars']} cols")
+                    format_parts.append(f"{self._txt_options['pageWidthInChars']} cols")
                 if self._txt_options.get("pageHeightInChars"):
-                    parts.append(f"{self._txt_options['pageHeightInChars']} rows")
+                    format_parts.append(f"{self._txt_options['pageHeightInChars']} rows")
                 if self._txt_options.get("trimLineRight"):
-                    parts.append("Trim")
-                if parts:
-                    self.export_summary_label.setText(", ".join(parts))
-                else:
-                    self.export_summary_label.setText("Custom settings")
-            else:
-                self.export_summary_label.setText("Default settings")
+                    format_parts.append("Trim")
+        
+        # Combine general and format-specific parts
+        all_parts = general_parts + format_parts
+        if all_parts:
+            self.export_summary_label.setText(", ".join(all_parts))
         else:
             self.export_summary_label.setText("Default settings")
 
@@ -864,6 +872,8 @@ class GenerateTab(QWidget):
             pdf_options,
             html_options,
             txt_options,
+            self._document_locale,
+            self._ignore_pagination,
         )
         self.generate_worker.finished.connect(self._on_generate_finished)
         self.generate_worker.error.connect(self._on_generate_error)
