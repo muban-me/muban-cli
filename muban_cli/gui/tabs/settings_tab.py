@@ -444,12 +444,27 @@ class SettingsTab(QWidget):
 
         try:
             config = get_config_manager().load()
+            
+            # Try to invalidate refresh token on server (best effort)
+            server_logout_ok = False
+            if config.refresh_token:
+                try:
+                    auth_client = MubanAuthClient(config)
+                    server_logout_ok = auth_client.logout(config.refresh_token)
+                except Exception as e:
+                    logger.debug(f"Server logout failed: {e}")
+            
+            # Always clear local tokens regardless of server response
             config.token = ""
             config.refresh_token = ""
             config.token_expires_at = 0
             get_config_manager().save(config)
             self._update_auth_status()
-            QMessageBox.information(self, "Logged Out", "You have been logged out.")
+            
+            if server_logout_ok:
+                QMessageBox.information(self, "Logged Out", "You have been logged out and your session has been invalidated on the server.")
+            else:
+                QMessageBox.information(self, "Logged Out", "You have been logged out locally.\n\nNote: Could not invalidate session on server (server may be unreachable).")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to logout: {e}")
 

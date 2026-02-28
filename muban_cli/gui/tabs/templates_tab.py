@@ -524,6 +524,13 @@ class TemplatesTab(QWidget):
         
         if is_auth_error:
             self._had_auth_error = True
+            # Clear templates - no access means no data
+            self._templates = []
+            self.table.setRowCount(0)
+            self._total_items = 0
+            self._total_pages = 1
+            self._current_page = 1
+            self._update_pagination_ui()
             self.status_label.setText("⚠️ Not authenticated - please log in via Settings")
             # Don't show popup for auth errors - just update status
         else:

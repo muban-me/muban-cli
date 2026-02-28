@@ -265,6 +265,14 @@ class ConfigManager:
                 logger.debug(f"Saved credentials to {self.credentials_file}")
             except OSError as e:
                 raise ConfigurationError(f"Cannot save credentials file: {e}")
+        else:
+            # No credentials to save - delete the file if it exists (e.g., after logout)
+            if self.credentials_file.exists():
+                try:
+                    self.credentials_file.unlink()
+                    logger.debug(f"Deleted credentials file {self.credentials_file}")
+                except OSError as e:
+                    logger.warning(f"Could not delete credentials file: {e}")
         
         self._config = config
     

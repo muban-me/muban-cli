@@ -433,6 +433,60 @@ class MubanAuthClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"Connection failed: {e}")
     
+    def logout(self, refresh_token: str) -> bool:
+        """
+        Logout and invalidate the refresh token on the server.
+        
+        Args:
+            refresh_token: The refresh token to invalidate
+        
+        Returns:
+            True if logout was successful, False otherwise
+        
+        Note:
+            This is a best-effort operation. Local tokens should always
+            be cleared regardless of the server response.
+        """
+        if not refresh_token:
+            logger.debug("No refresh token to invalidate")
+            return True
+        
+        # Try common logout endpoints
+        logout_endpoints = [
+            "/api/v1/auth/logout",
+            "/auth/logout",
+            "/api/auth/logout",
+            "/oauth/revoke",
+        ]
+        
+        for endpoint in logout_endpoints:
+            try:
+                url = urljoin(self.auth_base_url, endpoint.lstrip('/'))
+                logger.debug(f"Trying logout endpoint: {url}")
+                
+                response = self.session.post(
+                    url,
+                    headers={"Authorization": f"Bearer {refresh_token}"},
+                    timeout=self.config.timeout,
+                    verify=self.config.verify_ssl,
+                )
+                
+                if response.status_code in (200, 204):
+                    logger.info("Successfully logged out on server")
+                    return True
+                elif response.status_code == 404:
+                    # Endpoint doesn't exist, try next
+                    continue
+                else:
+                    logger.debug(f"Logout endpoint {endpoint} returned {response.status_code}")
+                    
+            except requests.exceptions.RequestException as e:
+                logger.debug(f"Logout request failed: {e}")
+                continue
+        
+        logger.warning("Could not invalidate refresh token on server (endpoints not found or failed)")
+        return False
+    
     def close(self) -> None:
         """Close the HTTP session."""
         if self._session:

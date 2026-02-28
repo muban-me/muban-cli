@@ -244,16 +244,37 @@ def register_auth_commands(cli: click.Group) -> None:
     @pass_context
     def logout(ctx: MubanContext, yes: bool):
         """
-        Clear stored authentication token.
+        Clear stored authentication token and invalidate session on server.
         """
+        from ..auth import MubanAuthClient
+        
         if not yes:
             if not confirm_action("Clear stored authentication token?"):
                 print_info("Cancelled.")
                 return
         
         config_manager = ctx.config_manager
+        config = config_manager.get()
+        
+        # Try to invalidate refresh token on server (best effort)
+        server_logout_ok = False
+        had_refresh_token = config.has_refresh_token()
+        if had_refresh_token:
+            try:
+                with MubanAuthClient(config) as auth_client:
+                    server_logout_ok = auth_client.logout(config.refresh_token)
+            except Exception:
+                pass  # Server logout is best effort
+        
+        # Always clear local tokens regardless of server response
         config_manager.update(token='', refresh_token='', token_expires_at=0)
-        print_success("Logged out successfully.")
+        
+        if server_logout_ok:
+            print_success("Logged out successfully. Session invalidated on server.")
+        else:
+            print_success("Logged out locally.")
+            if had_refresh_token and not server_logout_ok:
+                print_info("Note: Could not invalidate session on server.")
 
     @cli.command('refresh')
     @click.option('--auth-endpoint', help='Custom auth endpoint path')
