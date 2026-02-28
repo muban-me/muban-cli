@@ -652,6 +652,20 @@ The GUI provides a tabbed interface with the following sections:
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem
 
+**Typed Parameter Values:**
+
+When entering parameter values in the GUI, use JSON-like syntax to specify types:
+
+| Input | Type | Example |
+| ----- | ---- | ------- |
+| `"text"` or `'text'` | String | `"Jan Kowalski"` |
+| Number (no quotes) | Number | `123`, `12.5`, `-3.14` |
+| `true` / `false` | Boolean | `true` |
+| `null` | Null | `null` |
+| Unquoted text | String (implicit) | `Hello World` |
+
+This ensures numeric parameters like prices and quantities are sent as numbers to the API for proper locale-aware formatting.
+
 #### **🖥️ Server Info Tab**
 
 - View server configuration and status
@@ -883,13 +897,22 @@ muban-cli/
 │   ├── __init__.py        # Package initialization, version info
 │   ├── __main__.py        # Entry point for python -m muban_cli
 │   ├── cli.py             # Main CLI entry point
-│   ├── api.py             # REST API client
+│   ├── api.py             # Re-exports from api/ package (backward compat)
 │   ├── auth.py            # Authentication (password + OAuth2)
 │   ├── config.py          # Configuration management
 │   ├── packager.py        # Template packager (JRXML/DOCX → ZIP)
 │   ├── utils.py           # Utility functions (formatting, output)
 │   ├── exceptions.py      # Custom exceptions
 │   ├── py.typed           # PEP 561 marker
+│   ├── api/               # REST API client (modular)
+│   │   ├── __init__.py    # Package exports
+│   │   ├── _http.py       # Base HTTP client (session, auth, retry)
+│   │   ├── client.py      # MubanAPIClient facade
+│   │   ├── templates.py   # Template operations
+│   │   ├── users.py       # User management API
+│   │   ├── audit.py       # Audit log operations
+│   │   ├── admin.py       # Admin operations
+│   │   └── async_ops.py   # Async job polling
 │   ├── commands/          # Command modules
 │   │   ├── __init__.py    # Common options decorator
 │   │   ├── auth.py        # login, logout, whoami, refresh

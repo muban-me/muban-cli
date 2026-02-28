@@ -45,7 +45,7 @@ class TestMubanAPIClient:
     
     def test_headers(self, client):
         """Test request headers."""
-        headers = client._get_headers()
+        headers = client._http._get_headers()
         assert headers["Authorization"] == "Bearer test-jwt-token"
     
     @responses.activate
@@ -207,7 +207,7 @@ class TestMubanAPIClient:
     def test_context_manager(self, config):
         """Test client as context manager."""
         with MubanAPIClient(config) as client:
-            assert client._session is None  # Not created yet
+            assert client._http._session is None  # Not created yet
         # Session should be closed after context exit
 
 
