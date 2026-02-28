@@ -83,11 +83,35 @@ Environment Variables:
     envvar='MUBAN_CONFIG_DIR',
     help='Custom configuration directory'
 )
+@click.option(
+    '--debug',
+    is_flag=True,
+    help='Enable debug mode (logs to ~/.muban/debug.log)'
+)
 @click.pass_context
-def cli(ctx, config_dir: Optional[Path]):
+def cli(ctx, config_dir: Optional[Path], debug: bool):
     """Main CLI entry point."""
     ctx.ensure_object(MubanContext)
     ctx.obj.config_manager = get_config_manager(config_dir)
+    
+    # Configure debug logging
+    if debug:
+        config_dir_path = ctx.obj.config_manager.config_dir
+        log_file = config_dir_path / "debug.log"
+        
+        file_handler = logging.FileHandler(str(log_file), mode="w", encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        ))
+        
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.DEBUG)
+        root_logger.addHandler(file_handler)
+        
+        logging.getLogger("muban_cli").setLevel(logging.DEBUG)
+        click.echo(f"Debug mode enabled - logs written to: {log_file}")
 
 
 # ============================================================================

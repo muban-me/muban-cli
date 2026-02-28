@@ -4,6 +4,7 @@ API client for Muban Document Generation Service.
 Implements all REST API endpoints as defined in the OpenAPI specification.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
@@ -615,6 +616,9 @@ class MubanAPIClient:
             request_data["txtExportOptions"] = txt_export_options
         if ignore_pagination:
             request_data["ignorePagination"] = ignore_pagination
+        
+        # Log request body in debug mode
+        logger.debug("Generate document request body: %s", json.dumps(request_data, indent=2, ensure_ascii=False))
         
         # Make request
         url = urljoin(self.base_url, f"templates/{template_id}/generate/{output_format}")

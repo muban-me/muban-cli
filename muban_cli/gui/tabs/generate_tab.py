@@ -585,6 +585,7 @@ class GenerateTab(QWidget):
 
             params = {}
             data = None
+            loaded_options = []
 
             if isinstance(request, dict):
                 # Check for full request format with "parameters" key
@@ -598,9 +599,27 @@ class GenerateTab(QWidget):
                     # Simple dict format: {"param_name": "value", ...}
                     # Exclude known request keys that aren't parameters
                     exclude_keys = {"data", "filename", "documentLocale", "pdfExportOptions", 
-                                   "htmlExportOptions", "ignorePagination"}
+                                   "htmlExportOptions", "txtExportOptions", "ignorePagination"}
                     params = {k: v for k, v in request.items() if k not in exclude_keys}
                     data = request.get("data")
+                
+                # Extract export options from the request
+                if "documentLocale" in request:
+                    self._document_locale = request["documentLocale"]
+                    loaded_options.append(f"locale={self._document_locale}")
+                if "ignorePagination" in request:
+                    self._ignore_pagination = bool(request["ignorePagination"])
+                    loaded_options.append("ignorePagination")
+                if "pdfExportOptions" in request and isinstance(request["pdfExportOptions"], dict):
+                    self._pdf_options = request["pdfExportOptions"]
+                    loaded_options.append("pdfExportOptions")
+                if "htmlExportOptions" in request and isinstance(request["htmlExportOptions"], dict):
+                    self._html_options = request["htmlExportOptions"]
+                    loaded_options.append("htmlExportOptions")
+                if "txtExportOptions" in request and isinstance(request["txtExportOptions"], dict):
+                    self._txt_options = request["txtExportOptions"]
+                    loaded_options.append("txtExportOptions")
+                    
             elif isinstance(request, list):
                 # List format: [{"name": "param", "value": "val"}, ...]
                 params = {p.get("name"): p.get("value") for p in request if "name" in p}
@@ -615,18 +634,23 @@ class GenerateTab(QWidget):
 
             # Store and display data
             self._fields_data = data
+            options_info = f" (export options: {', '.join(loaded_options)})" if loaded_options else ""
+            
             if data:
                 self._data_json = json.dumps(data, indent=2, ensure_ascii=False)
                 self._update_data_preview()
                 self._set_data_row_visible(True)
                 self.fields_group.updateGeometry()
-                self._log(f"✓ Loaded request with parameters and data from {Path(file_path).name}")
+                self._log(f"✓ Loaded request with parameters and data from {Path(file_path).name}{options_info}")
             else:
                 self._data_json = ""
                 self._update_data_preview()
                 self._set_data_row_visible(False)
                 self.fields_group.updateGeometry()
-                self._log(f"✓ Loaded parameters from {Path(file_path).name}")
+                self._log(f"✓ Loaded parameters from {Path(file_path).name}{options_info}")
+            
+            # Update export summary to reflect loaded options
+            self._update_export_summary()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load request: {e}")
 
@@ -861,13 +885,33 @@ class GenerateTab(QWidget):
         pdf_options = self._get_pdf_options() if format == "pdf" else None
         html_options = self._get_html_options() if format == "html" else None
         txt_options = self._get_txt_options() if format == "txt" else None
+        
+        # Build request body for debug logging (mirrors what API client does)
+        params = self._get_parameters()
+        params_list = [{"name": k, "value": v} for k, v in params.items()]
+        request_body = {"parameters": params_list}
+        if data:
+            request_body["data"] = data
+        if self._document_locale:
+            request_body["documentLocale"] = self._document_locale
+        if self._ignore_pagination:
+            request_body["ignorePagination"] = self._ignore_pagination
+        if pdf_options:
+            request_body["pdfExportOptions"] = pdf_options
+        if html_options:
+            request_body["htmlExportOptions"] = html_options
+        if txt_options:
+            request_body["txtExportOptions"] = txt_options
+        
+        # Log request body in debug mode
+        logger.debug("Generate document request body:\n%s", json.dumps(request_body, indent=2, ensure_ascii=False))
 
         self.generate_worker = GenerateWorker(
             client,
             template_id,
             output_path,
             format,
-            self._get_parameters(),
+            params,
             data,
             pdf_options,
             html_options,

@@ -122,6 +122,31 @@ Configuration is stored in `~/.muban/config.json`. JWT tokens are stored separat
 
 Environment variables take precedence over configuration files.
 
+### Debug Mode
+
+Both CLI and GUI support a `--debug` flag that enables verbose logging to help diagnose issues:
+
+```bash
+# CLI - enable debug mode (must come before subcommand)
+muban --debug generate TEMPLATE_ID -p title="Test"
+muban --debug list
+
+# GUI - enable debug mode
+muban-gui --debug
+```
+
+When debug mode is enabled:
+
+- Full request bodies are logged (including parameters, data, and export options)
+- All API requests and responses are captured
+- Logs are written to `~/.muban/debug.log`
+
+This is useful for:
+
+- Verifying that parameters are being sent correctly to the API
+- Diagnosing locale or export option issues
+- Providing detailed information for support tickets
+
 ## Commands Reference
 
 ### Authentication
