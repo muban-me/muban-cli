@@ -292,3 +292,111 @@ class TestPrintJson:
         captured = capsys.readouterr()
         # 4-space indent
         assert '    "key"' in captured.out
+
+
+class TestParseTypedValue:
+    """Tests for parse_typed_value function."""
+    
+    def test_parse_quoted_string_double(self):
+        """Test parsing double-quoted string."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value('"Hello World"') == "Hello World"
+        assert parse_typed_value('"123"') == "123"
+        assert parse_typed_value('""') == ""
+    
+    def test_parse_quoted_string_single(self):
+        """Test parsing single-quoted string."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("'Hello'") == "Hello"
+        assert parse_typed_value("'123'") == "123"
+    
+    def test_parse_integer(self):
+        """Test parsing integers."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("123") == 123
+        assert parse_typed_value("-456") == -456
+        assert parse_typed_value("0") == 0
+    
+    def test_parse_float(self):
+        """Test parsing floats."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("12.5") == 12.5
+        assert parse_typed_value("-3.14") == -3.14
+        assert parse_typed_value("0.5") == 0.5
+    
+    def test_parse_boolean(self):
+        """Test parsing booleans."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("true") is True
+        assert parse_typed_value("false") is False
+        assert parse_typed_value("TRUE") is True
+        assert parse_typed_value("False") is False
+    
+    def test_parse_null(self):
+        """Test parsing null."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("null") is None
+        assert parse_typed_value("NULL") is None
+    
+    def test_parse_unquoted_string(self):
+        """Test parsing unquoted text as string."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("Hello World") == "Hello World"
+        assert parse_typed_value("abc") == "abc"
+    
+    def test_parse_empty(self):
+        """Test parsing empty string."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("") == ""
+        assert parse_typed_value("   ") == ""
+    
+    def test_parse_with_whitespace(self):
+        """Test parsing with surrounding whitespace."""
+        from muban_cli.utils import parse_typed_value
+        assert parse_typed_value("  123  ") == 123
+        assert parse_typed_value('  "test"  ') == "test"
+
+
+class TestFormatTypedValue:
+    """Tests for format_typed_value function."""
+    
+    def test_format_string(self):
+        """Test formatting string values."""
+        from muban_cli.utils import format_typed_value
+        assert format_typed_value("Hello") == '"Hello"'
+        assert format_typed_value("123") == '"123"'
+        assert format_typed_value("") == '""'
+    
+    def test_format_integer(self):
+        """Test formatting integer values."""
+        from muban_cli.utils import format_typed_value
+        assert format_typed_value(123) == "123"
+        assert format_typed_value(-456) == "-456"
+        assert format_typed_value(0) == "0"
+    
+    def test_format_float(self):
+        """Test formatting float values."""
+        from muban_cli.utils import format_typed_value
+        assert format_typed_value(12.5) == "12.5"
+        assert format_typed_value(-3.14) == "-3.14"
+    
+    def test_format_boolean(self):
+        """Test formatting boolean values."""
+        from muban_cli.utils import format_typed_value
+        assert format_typed_value(True) == "true"
+        assert format_typed_value(False) == "false"
+    
+    def test_format_null(self):
+        """Test formatting None as null."""
+        from muban_cli.utils import format_typed_value
+        assert format_typed_value(None) == "null"
+    
+    def test_roundtrip(self):
+        """Test parse/format roundtrip preserves values."""
+        from muban_cli.utils import parse_typed_value, format_typed_value
+        test_cases = ['"Hello"', "123", "12.5", "true", "false", "null"]
+        for original in test_cases:
+            parsed = parse_typed_value(original)
+            formatted = format_typed_value(parsed)
+            reparsed = parse_typed_value(formatted)
+            assert parsed == reparsed, f"Roundtrip failed for {original}"

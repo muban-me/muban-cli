@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 
 from muban_cli.api import MubanAPIClient
 from muban_cli.config import get_config_manager
+from muban_cli.utils import parse_typed_value, format_typed_value
 from muban_cli.gui.icons import create_play_icon
 from muban_cli.gui.error_dialog import show_error_dialog
 
@@ -247,7 +248,7 @@ class GenerateTab(QWidget):
         self.param_name_input = QLineEdit()
         self.param_name_input.setPlaceholderText("Parameter name")
         self.param_value_input = QLineEdit()
-        self.param_value_input.setPlaceholderText("Value")
+        self.param_value_input.setPlaceholderText('Value ("text" for string, 123 for number)')
         self.add_param_btn = QPushButton("Add")
         self.add_param_btn.clicked.connect(self._add_manual_param)
         manual_layout.addWidget(self.param_name_input)
@@ -552,18 +553,34 @@ class GenerateTab(QWidget):
     def _add_manual_param(self):
         """Add a manual parameter."""
         name = self.param_name_input.text().strip()
-        value = self.param_value_input.text()
+        value_text = self.param_value_input.text()
         if not name:
             return
+
+        # Parse and format the value to show type
+        typed_value = parse_typed_value(value_text)
+        display_value = format_typed_value(typed_value)
+        
+        # Determine type name for display
+        if typed_value is None:
+            type_name = "null"
+        elif isinstance(typed_value, bool):
+            type_name = "Boolean"
+        elif isinstance(typed_value, int):
+            type_name = "Integer"
+        elif isinstance(typed_value, float):
+            type_name = "Number"
+        else:
+            type_name = "String"
 
         row = self.params_table.rowCount()
         self.params_table.insertRow(row)
 
         name_item = QTableWidgetItem(name)
         self.params_table.setItem(row, 0, name_item)
-        self.params_table.setItem(row, 1, QTableWidgetItem("String"))
+        self.params_table.setItem(row, 1, QTableWidgetItem(type_name))
         self.params_table.setItem(row, 2, QTableWidgetItem(""))  # Default (empty for manual)
-        self.params_table.setItem(row, 3, QTableWidgetItem(value))  # Value
+        self.params_table.setItem(row, 3, QTableWidgetItem(display_value))  # Value with type indicator
 
         self.param_name_input.clear()
         self.param_value_input.clear()
@@ -626,11 +643,13 @@ class GenerateTab(QWidget):
             else:
                 raise ValueError("Invalid JSON format")
 
-            # Apply parameters to table
+            # Apply parameters to table (preserving types from JSON)
             for row in range(self.params_table.rowCount()):
                 name_item = self.params_table.item(row, 0)
                 if name_item and name_item.text() in params:
-                    self.params_table.setItem(row, 3, QTableWidgetItem(str(params[name_item.text()])))
+                    param_value = params[name_item.text()]
+                    display_value = format_typed_value(param_value)
+                    self.params_table.setItem(row, 3, QTableWidgetItem(display_value))
 
             # Store and display data
             self._fields_data = data
@@ -693,16 +712,17 @@ class GenerateTab(QWidget):
             self.output_input.setText(file_path)
 
     def _get_parameters(self) -> Dict[str, Any]:
-        """Get parameters from table."""
+        """Get parameters from table with proper typing."""
         params = {}
         for row in range(self.params_table.rowCount()):
             name_item = self.params_table.item(row, 0)
             value_item = self.params_table.item(row, 3)
             if name_item and value_item:
                 name = name_item.text()
-                value = value_item.text()
-                if value:  # Only include non-empty values
-                    params[name] = value
+                value_text = value_item.text()
+                if value_text:  # Only include non-empty values
+                    # Parse the displayed value back to typed value
+                    params[name] = parse_typed_value(value_text)
         return params
 
     def _get_data(self) -> Optional[Dict[str, Any]]:

@@ -663,3 +663,117 @@ def get_exit_code(success: bool) -> int:
         Exit code (0 for success, 1 for failure)
     """
     return 0 if success else 1
+
+
+# ============================================================================
+# Typed Value Parsing (for GUI parameter/data entry)
+# ============================================================================
+
+def parse_typed_value(text: str) -> Any:
+    """
+    Parse a text input into a typed value based on JSON-like syntax.
+    
+    Rules:
+    - Quoted strings ("..." or '...'): String value (quotes stripped)
+    - true/false: Boolean
+    - null: None
+    - Numbers (int/float): Numeric value
+    - Unquoted text: String (implicit)
+    
+    Args:
+        text: User input text
+    
+    Returns:
+        Typed Python value (str, int, float, bool, or None)
+    
+    Examples:
+        >>> parse_typed_value('"Hello"')
+        'Hello'
+        >>> parse_typed_value('123')
+        123
+        >>> parse_typed_value('12.5')
+        12.5
+        >>> parse_typed_value('true')
+        True
+        >>> parse_typed_value('null')
+        None
+        >>> parse_typed_value('Hello World')
+        'Hello World'
+    """
+    if not isinstance(text, str):
+        return text
+    
+    stripped = text.strip()
+    
+    # Empty string
+    if not stripped:
+        return ""
+    
+    # Explicit string with double quotes
+    if stripped.startswith('"') and stripped.endswith('"') and len(stripped) >= 2:
+        return stripped[1:-1]
+    
+    # Explicit string with single quotes
+    if stripped.startswith("'") and stripped.endswith("'") and len(stripped) >= 2:
+        return stripped[1:-1]
+    
+    # Boolean
+    if stripped.lower() == 'true':
+        return True
+    if stripped.lower() == 'false':
+        return False
+    
+    # Null
+    if stripped.lower() == 'null':
+        return None
+    
+    # Try integer
+    try:
+        return int(stripped)
+    except ValueError:
+        pass
+    
+    # Try float
+    try:
+        return float(stripped)
+    except ValueError:
+        pass
+    
+    # Default to string (implicit)
+    return stripped
+
+
+def format_typed_value(value: Any) -> str:
+    """
+    Format a typed value for display in UI with type indication.
+    
+    Strings are displayed with quotes, numbers/booleans/null without.
+    
+    Args:
+        value: Typed Python value
+    
+    Returns:
+        Display string with type indication
+    
+    Examples:
+        >>> format_typed_value('Hello')
+        '"Hello"'
+        >>> format_typed_value(123)
+        '123'
+        >>> format_typed_value(12.5)
+        '12.5'
+        >>> format_typed_value(True)
+        'true'
+        >>> format_typed_value(None)
+        'null'
+    """
+    if value is None:
+        return 'null'
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return f'"{value}"'
+    # Fallback for other types (lists, dicts, etc.)
+    return json.dumps(value, ensure_ascii=False)
