@@ -10,6 +10,7 @@ Commands:
 - search: Search templates
 """
 
+import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -52,7 +53,8 @@ def register_template_commands(cli: click.Group) -> None:
     @common_options
     @click.option('--page', '-p', type=int, default=1, help='Page number')
     @click.option('--size', '-n', type=int, default=20, help='Items per page')
-    @click.option('--search', '-s', help='Search term')
+    @click.option('--search', '-s', help='Search term (searches name, description, metadata)')
+    @click.option('--description', help='Filter by description')
     @click.option('--sort-by', type=click.Choice(['name', 'author', 'created', 'fileSize', 'templateType']), 
                   default='created', help='Sort field (default: created)')
     @click.option('--sort-dir', type=click.Choice(['asc', 'desc']), 
@@ -68,6 +70,7 @@ def register_template_commands(cli: click.Group) -> None:
         page: int,
         size: int,
         search: Optional[str],
+        description: Optional[str],
         sort_by: str,
         sort_dir: str
     ):
@@ -78,6 +81,7 @@ def register_template_commands(cli: click.Group) -> None:
         Examples:
           muban list
           muban list --search "invoice" --format json
+          muban list --description "monthly report"
           muban list --page 2 --size 50
           muban list --sort-by name --sort-dir asc
         """
@@ -88,6 +92,7 @@ def register_template_commands(cli: click.Group) -> None:
             with MubanAPIClient(ctx.config_manager.get()) as client:
                 result = client.list_templates(
                     page=page, size=size, search=search,
+                    description=description,
                     sort_by=sort_by, sort_dir=sort_dir
                 )
                 
@@ -190,7 +195,8 @@ def register_template_commands(cli: click.Group) -> None:
     @click.argument('file', type=click.Path(exists=True, path_type=Path))
     @click.option('--name', '-n', required=True, help='Template name')
     @click.option('--author', '-a', required=True, help='Template author')
-    @click.option('--metadata', '-m', help='Template metadata/description')
+    @click.option('--description', '-d', help='Human-readable template description (max 1000 chars)')
+    @click.option('--metadata', '-m', help='Template metadata as JSON object (for S2S integration)')
     @pass_context
     @require_config
     def push_template(
@@ -202,6 +208,7 @@ def register_template_commands(cli: click.Group) -> None:
         file: Path,
         name: str,
         author: str,
+        description: Optional[str],
         metadata: Optional[str]
     ):
         """
@@ -213,7 +220,8 @@ def register_template_commands(cli: click.Group) -> None:
         \b
         Examples:
           muban push report.zip --name "Monthly Report" --author "John Doe"
-          muban push invoice.zip -n "Invoice" -a "Finance Team" -m "Standard invoice"
+          muban push invoice.zip -n "Invoice" -a "Finance Team" -d "Standard invoice template"
+          muban push report.zip -n "Report" -a "Team" -m '{"tags": ["finance"], "version": "1.0"}'
         """
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)
@@ -221,6 +229,17 @@ def register_template_commands(cli: click.Group) -> None:
         if not file.suffix.lower() == '.zip':
             print_error("Template must be a ZIP file.")
             sys.exit(1)
+        
+        # Validate metadata is valid JSON if provided
+        if metadata:
+            try:
+                parsed = json.loads(metadata)
+                if not isinstance(parsed, dict):
+                    print_error("Metadata must be a JSON object (e.g., '{\"key\": \"value\"}'). Got: " + type(parsed).__name__)
+                    sys.exit(1)
+            except json.JSONDecodeError as e:
+                print_error(f"Invalid JSON in metadata: {e}")
+                sys.exit(1)
         
         try:
             with MubanAPIClient(ctx.config_manager.get()) as client:
@@ -231,6 +250,7 @@ def register_template_commands(cli: click.Group) -> None:
                     file_path=file,
                     name=name,
                     author=author,
+                    description=description,
                     metadata=metadata
                 )
                 

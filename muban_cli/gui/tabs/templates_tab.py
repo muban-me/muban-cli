@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QToolButton,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QSpinBox,
     QStyle,
+    QApplication,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -36,6 +38,7 @@ from muban_cli.gui.icons import (
     create_arrow_down_icon,
     create_arrow_left_icon,
     create_arrow_right_icon,
+    create_copy_icon,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,12 +117,13 @@ class UploadWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, client: MubanAPIClient, file_path: str, name: str, author: str):
+    def __init__(self, client: MubanAPIClient, file_path: str, name: str, author: str, description: str = ""):
         super().__init__()
         self.client = client
         self.file_path = Path(file_path)
         self.name = name
         self.author = author
+        self.description = description
 
     def run(self):
         try:
@@ -127,6 +131,7 @@ class UploadWorker(QThread):
                 self.file_path,
                 name=self.name,
                 author=self.author,
+                description=self.description if self.description else None,
             )
             self.finished.emit(result)
         except Exception as e:
@@ -157,6 +162,7 @@ class TemplatesTab(QWidget):
         super().__init__()
         self._templates: List[Dict[str, Any]] = []
         self._initial_load_done = False
+        self._had_auth_error = False  # Track if last load failed due to auth
         self.worker: Optional[TemplateWorker] = None
         self._current_page = 1
         self._total_pages = 1
@@ -168,12 +174,24 @@ class TemplatesTab(QWidget):
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
-        """Auto-load templates on first display."""
+        """Auto-load templates on first display or after auth error recovery."""
         super().showEvent(event)
         if not self._initial_load_done:
             self._initial_load_done = True
             # Calculate initial page size after layout is ready
             QTimer.singleShot(0, self._initial_load)
+        elif self._had_auth_error:
+            # Had auth error before - try to refresh now that tab is visible again
+            # User may have logged in on the settings tab
+            QTimer.singleShot(100, self._try_refresh_after_auth_error)
+
+    def _try_refresh_after_auth_error(self):
+        """Attempt to refresh after previous auth error - silently if still not authenticated."""
+        # Check if we can now authenticate by trying to get a client
+        client = self._get_client()
+        if client:
+            # Looks like we have valid config now, try to reload
+            self._load_templates()
 
     def _initial_load(self):
         """Perform initial load with calculated page size."""
@@ -415,6 +433,7 @@ class TemplatesTab(QWidget):
         """Handle loaded templates."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
+        self._had_auth_error = False  # Clear auth error flag on success
 
         templates = result.get('templates', [])
         self._current_page = result.get('page', 1)
@@ -425,8 +444,18 @@ class TemplatesTab(QWidget):
         self.table.setRowCount(len(templates))
 
         for i, t in enumerate(templates):
-            self.table.setItem(i, 0, QTableWidgetItem(t.get("id", "")))
-            self.table.setItem(i, 1, QTableWidgetItem(t.get("name", "")))
+            # ID with copy button
+            template_id = t.get("id", "")
+            id_widget = self._create_id_cell_widget(template_id)
+            self.table.setCellWidget(i, 0, id_widget)
+            
+            # Name with tooltip showing description (only if description exists)
+            name_item = QTableWidgetItem(t.get("name", ""))
+            description = t.get("description", "")
+            if description:
+                name_item.setToolTip(description)
+            self.table.setItem(i, 1, name_item)
+            
             self.table.setItem(i, 2, QTableWidgetItem(t.get("author", "")))
             # Format file size (right-aligned)
             file_size = t.get("fileSize")
@@ -485,8 +514,28 @@ class TemplatesTab(QWidget):
         """Handle load error."""
         self._set_ui_enabled(True)
         self.progress.setVisible(False)
-        self.status_label.setText(f"⚠️ Error: {error}")
-        QMessageBox.warning(self, "Error", f"Failed to load templates:\n{error}")
+        
+        # Detect authentication errors
+        error_lower = error.lower()
+        is_auth_error = any(term in error_lower for term in [
+            '401', 'unauthorized', 'not authenticated', 'authentication',
+            'token expired', 'invalid token', 'access denied'
+        ])
+        
+        if is_auth_error:
+            self._had_auth_error = True
+            # Clear templates - no access means no data
+            self._templates = []
+            self.table.setRowCount(0)
+            self._total_items = 0
+            self._total_pages = 1
+            self._current_page = 1
+            self._update_pagination_ui()
+            self.status_label.setText("⚠️ Not authenticated - please log in via Settings")
+            # Don't show popup for auth errors - just update status
+        else:
+            self.status_label.setText(f"⚠️ Error: {error}")
+            QMessageBox.warning(self, "Error", f"Failed to load templates:\n{error}")
 
     def _get_selected_template(self) -> Optional[Dict[str, Any]]:
         """Get currently selected template."""
@@ -528,6 +577,7 @@ class TemplatesTab(QWidget):
             file_path,
             dialog.get_name(),
             dialog.get_author(),
+            dialog.get_description(),
         )
         self.upload_worker.finished.connect(self._on_upload_finished)
         self.upload_worker.error.connect(self._on_upload_error)
@@ -617,6 +667,39 @@ class TemplatesTab(QWidget):
             tabs = getattr(main_window, "tabs")
             generate_tab.set_template(template["id"])
             tabs.setCurrentWidget(generate_tab)
+
+    def _create_id_cell_widget(self, template_id: str) -> QWidget:
+        """Create a widget with ID text and copy button."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(4)
+        
+        # ID label (truncated for display, full ID on tooltip)
+        label = QLabel(template_id)
+        label.setToolTip(f"Click copy button to copy: {template_id}")
+        layout.addWidget(label, 1)  # stretch=1 to take available space
+        
+        # Copy button
+        copy_btn = QToolButton()
+        copy_btn.setIcon(create_copy_icon())
+        copy_btn.setToolTip("Copy ID to clipboard")
+        copy_btn.setFixedSize(20, 20)
+        copy_btn.setAutoRaise(True)  # Flat button that raises on hover
+        copy_btn.clicked.connect(lambda: self._copy_to_clipboard(template_id))
+        layout.addWidget(copy_btn)
+        
+        return widget
+
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard and show brief feedback."""
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText(text)
+            # Update status briefly
+            old_status = self.status_label.text()
+            self.status_label.setText("✓ ID copied to clipboard")
+            QTimer.singleShot(2000, lambda: self.status_label.setText(old_status))
 
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""

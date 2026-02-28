@@ -349,6 +349,14 @@ def format_template_detail(template: Dict[str, Any], output_format: OutputFormat
     click.secho(f"Template: {template.get('name', 'Unknown')}", fg="cyan", bold=True)
     click.echo(f"{'=' * 60}")
     click.echo(f"ID:        {template.get('id', '-')}")
+    
+    # Show description prominently if present
+    description = template.get('description')
+    if description:
+        click.echo(f"\nDescription:")
+        click.secho(f"  {description}", fg="white")
+        click.echo()
+    
     click.echo(f"Author:    {template.get('author', '-')}")
     click.echo(f"Size:      {format_file_size(template.get('fileSize'))}")
     click.echo(f"Created:   {format_datetime(template.get('created'))}")
@@ -381,12 +389,13 @@ def format_template_combined_csv(
     # Add template info rows
     rows.append(["info", "id", "String", template.get('id', '-'), "Template ID"])
     rows.append(["info", "name", "String", template.get('name', '-'), "Template name"])
+    rows.append(["info", "description", "String", template.get('description', ''), "Human-readable description"])
     rows.append(["info", "author", "String", template.get('author', '-'), "Template author"])
     rows.append(["info", "fileSize", "Integer", str(template.get('fileSize', 0)), "File size in bytes"])
     rows.append(["info", "created", "DateTime", template.get('created', '-'), "Creation timestamp"])
     rows.append(["info", "templatePath", "String", template.get('templatePath', '-'), "Server path"])
     if template.get('metadata'):
-        rows.append(["info", "metadata", "String", template.get('metadata', ''), "Template description"])
+        rows.append(["info", "metadata", "String", template.get('metadata', ''), "Structured metadata (JSON)"])
     
     # Add parameter rows
     if parameters:
