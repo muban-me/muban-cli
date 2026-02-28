@@ -406,6 +406,7 @@ class MubanAPIClient:
         page: int = 1,
         size: int = 20,
         search: Optional[str] = None,
+        description: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_dir: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -415,7 +416,8 @@ class MubanAPIClient:
         Args:
             page: Page number (1-indexed)
             size: Items per page
-            search: Search term
+            search: Search term (searches across name, description, metadata)
+            description: Filter by description specifically
             sort_by: Sort field (name, author, created, fileSize)
             sort_dir: Sort direction (asc, desc)
         
@@ -425,6 +427,8 @@ class MubanAPIClient:
         params: Dict[str, Any] = {"page": page, "size": size}
         if search:
             params["search"] = search
+        if description:
+            params["description"] = description
         if sort_by:
             params["sortBy"] = sort_by
         if sort_dir:
@@ -473,6 +477,7 @@ class MubanAPIClient:
         file_path: Path,
         name: str,
         author: str,
+        description: Optional[str] = None,
         metadata: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -482,7 +487,8 @@ class MubanAPIClient:
             file_path: Path to ZIP file
             name: Template name
             author: Template author
-            metadata: Optional metadata
+            description: Optional human-readable description (max 1000 chars)
+            metadata: Optional metadata (JSON string for S2S integration)
         
         Returns:
             Uploaded template details
@@ -501,6 +507,8 @@ class MubanAPIClient:
                 'name': name,
                 'author': author,
             }
+            if description:
+                data['description'] = description
             if metadata:
                 data['metadata'] = metadata
             

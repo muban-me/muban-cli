@@ -201,3 +201,34 @@ def create_login_icon(size: int = 16) -> QIcon:
     painter.end()
     
     return QIcon(pixmap)
+
+
+def create_copy_icon(size: int = 16) -> QIcon:
+    """Create a copy/clipboard icon using palette text color."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    
+    color = get_text_color()
+    pen = QPen(color)
+    pen.setWidth(1)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    
+    # Draw two overlapping rectangles (back and front)
+    margin = 2
+    offset = 3
+    rect_w = size - margin * 2 - offset
+    rect_h = size - margin * 2 - offset
+    
+    # Back rectangle (offset to top-left)
+    painter.drawRect(margin, margin, rect_w, rect_h)
+    
+    # Front rectangle (offset to bottom-right)
+    painter.drawRect(margin + offset, margin + offset, rect_w, rect_h)
+    
+    painter.end()
+    
+    return QIcon(pixmap)
