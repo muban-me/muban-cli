@@ -217,7 +217,7 @@ muban get TEMPLATE_ID --params --fields --format json
 
 # Upload a template (ZIP format)
 muban push report.zip --name "Monthly Report" --author "John Doe"
-muban push invoice.zip -n "Invoice" -a "Finance Team" -m "Standard invoice template"
+muban push invoice.zip -n "Invoice" -a "Finance Team" -d "Standard invoice template"
 
 # Download a template
 muban pull TEMPLATE_ID
@@ -729,7 +729,7 @@ zip -r template.zip "$TEMPLATE_DIR"
 muban push template.zip \
   --name "$TEMPLATE_NAME" \
   --author "$AUTHOR" \
-  --metadata "Deployed from commit ${GIT_COMMIT:-unknown}"
+  --description "Deployed from commit ${GIT_COMMIT:-unknown}"
 
 # Cleanup
 rm template.zip

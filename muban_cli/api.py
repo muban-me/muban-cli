@@ -14,6 +14,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from . import __version__
 from .config import MubanConfig, get_config, get_config_manager
 from .exceptions import (
     APIError,
@@ -73,7 +74,7 @@ class MubanAPIClient:
             
             # Set default headers
             self._session.headers.update({
-                "User-Agent": "muban-cli/1.0.0",
+                "User-Agent": f"muban-cli/{__version__}",
                 "Accept": "application/json",
             })
         
