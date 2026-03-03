@@ -10,7 +10,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 - **Graphical User Interface** - Optional PyQt6-based GUI for visual template management and document generation
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates (JRXML and DOCX)
-- **Template Packaging** - Package JRXML or DOCX templates with optional fonts into deployable ZIP packages
+- **Template Packaging** - Package JRXML or DOCX templates with auto-detected image assets and optional fonts into deployable ZIP packages
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, HTML, and TXT documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter audit logs
@@ -255,7 +255,7 @@ muban delete TEMPLATE_ID --yes  # Skip confirmation
 
 ### Template Packaging
 
-The `package` command packages a template file (JRXML or DOCX) into a ZIP file ready for upload. For JRXML templates, it analyzes the file and includes all dependencies (images, subreports). For DOCX templates, it packages the file with optional custom fonts.
+The `package` command packages a template file (JRXML or DOCX) into a ZIP file ready for upload. For JRXML templates, it analyzes the file and includes all dependencies (images, subreports). For DOCX templates, it scans images for ALT text with the `image:` prefix and automatically includes referenced assets (static paths, SpEL expression path candidates, and all files from dynamic directories), along with optional custom fonts.
 
 ```bash
 # Package a JRXML template (creates template.zip)

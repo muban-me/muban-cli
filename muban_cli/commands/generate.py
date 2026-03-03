@@ -29,7 +29,7 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option(
         '--output-format', '-F',
         'doc_format',
-        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html', 'txt']),
+        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html', 'txt'], case_sensitive=False),
         default='pdf',
         help='Output document format'
     )

@@ -249,7 +249,9 @@ class TemplatesAPI:
         
         logger.debug("Generate document request body: %s", json.dumps(request_data, indent=2, ensure_ascii=False))
         
-        url = urljoin(self._http.base_url, f"templates/{template_id}/generate/{output_format}")
+        # Always use lowercase format in URL to match API expectations
+        api_format = output_format.lower()
+        url = urljoin(self._http.base_url, f"templates/{template_id}/generate/{api_format}")
         headers = self._http._get_headers({"Content-Type": "application/json"})
         
         try:
@@ -272,7 +274,7 @@ class TemplatesAPI:
             if 'filename=' in content_disposition:
                 fname = content_disposition.split('filename=')[1].strip('"\'')
             else:
-                fname = filename or f"document.{output_format}"
+                fname = filename or f"document.{api_format}"
             output_path = Path(fname)
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,7 +304,9 @@ class TemplatesAPI:
         Returns:
             Path to generated document
         """
-        url = urljoin(self._http.base_url, f"templates/{template_id}/generate/{output_format}")
+        # Always use lowercase format in URL to match API expectations
+        api_format = output_format.lower()
+        url = urljoin(self._http.base_url, f"templates/{template_id}/generate/{api_format}")
         headers = self._http._get_headers({"Content-Type": "application/json"})
         
         try:
@@ -325,7 +329,7 @@ class TemplatesAPI:
             if 'filename=' in content_disposition:
                 fname = content_disposition.split('filename=')[1].strip('"\'')
             else:
-                fname = f"document.{output_format}"
+                fname = f"document.{api_format}"
             output_path = Path(fname)
         
         output_path.parent.mkdir(parents=True, exist_ok=True)

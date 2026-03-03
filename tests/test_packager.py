@@ -879,3 +879,434 @@ class TestPackageWithFontsXml:
             names = zf.namelist()
             assert "fonts.xml" in names
             assert "fonts/NonExistent.ttf" not in names
+
+
+def _create_docx_with_images(docx_path: Path, alt_texts: list, header_alt_texts: list = None):
+    """
+    Create a minimal DOCX file (ZIP with Open XML) containing images with specified ALT texts.
+    
+    Args:
+        docx_path: Path to write the DOCX file
+        alt_texts: List of ALT text strings for images in the main document
+        header_alt_texts: Optional list of ALT text strings for images in header1.xml
+    """
+    # Minimal [Content_Types].xml
+    content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="xml" ContentType="application/xml"/>
+    <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>'''
+    
+    # Minimal _rels/.rels
+    rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>'''
+    
+    # Build drawing elements for each ALT text
+    wp_ns = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
+    
+    def build_drawings(alt_text_list):
+        drawings = ''
+        for i, alt_text in enumerate(alt_text_list):
+            # XML-escape the alt text for safe embedding in attribute values
+            escaped = alt_text.replace('&', '&amp;').replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;') if alt_text else ''
+            descr_attr = f' descr="{escaped}"' if alt_text else ''
+            drawings += f'''
+            <w:r>
+                <w:drawing>
+                    <wp:inline xmlns:wp="{wp_ns}">
+                        <wp:docPr id="{i + 1}" name="Picture {i + 1}"{descr_attr}/>
+                    </wp:inline>
+                </w:drawing>
+            </w:r>'''
+        return drawings
+    
+    # Main document
+    document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:wp="{wp_ns}">
+    <w:body>
+        <w:p>{build_drawings(alt_texts)}
+        </w:p>
+    </w:body>
+</w:document>'''
+    
+    with zipfile.ZipFile(docx_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('[Content_Types].xml', content_types)
+        zf.writestr('_rels/.rels', rels)
+        zf.writestr('word/document.xml', document_xml)
+        
+        # Add header if alt texts provided
+        if header_alt_texts:
+            header_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+       xmlns:wp="{wp_ns}">
+    <w:p>{build_drawings(header_alt_texts)}
+    </w:p>
+</w:hdr>'''
+            zf.writestr('word/header1.xml', header_xml)
+
+
+class TestDocxImageExtraction:
+    """Test DOCX image asset reference extraction from ALT text."""
+    
+    def test_no_images_no_assets(self, temp_dir, packager):
+        """Test DOCX with no images returns no assets."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 0
+        assert len(result.skipped_dynamic) == 0
+    
+    def test_image_without_prefix_ignored(self, temp_dir, packager):
+        """Test images without 'image:' prefix are ignored."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["A decorative logo", "Some alt text"])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 0
+    
+    def test_static_file_path(self, temp_dir, packager):
+        """Test static file path extraction (image:assets/logo.png)."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/logo.png"])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 1
+        assert assets[0].path == "assets/logo.png"
+        assert assets[0].asset_type == "image"
+        assert assets[0].reports_dir_value == ""
+        assert not assets[0].is_dynamic_dir
+    
+    def test_static_file_path_nested(self, temp_dir, packager):
+        """Test static nested file path."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/img/stamps/company.png"])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 1
+        assert assets[0].path == "assets/img/stamps/company.png"
+    
+    def test_simple_key_no_path_skipped(self, temp_dir, packager):
+        """Test simple key without path (API-provided) produces no asset."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:facsimile"])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        # Simple keys are API-provided, nothing to bundle
+        assert len(assets) == 0
+        assert len(result.skipped_dynamic) == 0
+    
+    def test_spel_ternary_extracts_both_paths(self, temp_dir, packager):
+        """Test SpEL ternary expression extracts both path candidates."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${ gender == 'F' ? 'assets/female.png' : 'assets/male.png' }"
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        paths = sorted([a.path for a in assets])
+        assert len(paths) == 2
+        assert "assets/female.png" in paths
+        assert "assets/male.png" in paths
+    
+    def test_spel_ternary_filters_non_path_literals(self, temp_dir, packager):
+        """Test SpEL ternary filters out comparison values that aren't paths."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${ 'female'.equals(customer_gender) ? 'pictures/female.png' : 'pictures/male.png' }"
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        paths = [a.path for a in assets]
+        # 'female' should be filtered out (no / or extension)
+        assert "female" not in paths
+        assert "pictures/female.png" in paths
+        assert "pictures/male.png" in paths
+    
+    def test_spel_dynamic_directory_concatenation(self, temp_dir, packager):
+        """Test SpEL concatenation with dynamic directory pattern."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${'assets/signatures/' + manager + '.png'}"
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 1
+        assert assets[0].path == "assets/signatures/"
+        assert assets[0].is_dynamic_dir is True
+        assert assets[0].dynamic_param == "manager"
+        assert assets[0].asset_type == "directory"
+    
+    def test_spel_dynamic_directory_double_quoted(self, temp_dir, packager):
+        """Test SpEL concatenation with double-quoted directory."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            'image:${"assets/signatures/" + manager + ".png"}'
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 1
+        assert assets[0].path == "assets/signatures/"
+        assert assets[0].is_dynamic_dir is True
+        assert assets[0].dynamic_param == "manager"
+    
+    def test_fully_dynamic_expression_skipped(self, temp_dir, packager):
+        """Test fully dynamic expression (no path literals) is reported as skipped."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:${imagePath}"])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 0
+        assert len(result.skipped_dynamic) == 1
+        assert "${imagePath}" in result.skipped_dynamic[0]
+    
+    def test_multiple_images_mixed(self, temp_dir, packager):
+        """Test multiple images with mixed types."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:assets/logo.png",                                     # static
+            "image:facsimile",                                           # simple key (API)
+            "image:${ x ? 'assets/a.png' : 'assets/b.png' }",          # ternary
+            "image:${dynamicOnly}",                                      # fully dynamic
+            "A regular image without prefix",                            # no prefix
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        paths = [a.path for a in assets]
+        # Static + ternary paths
+        assert "assets/logo.png" in paths
+        assert "assets/a.png" in paths
+        assert "assets/b.png" in paths
+        # Simple key and fully dynamic are NOT in assets
+        assert len(assets) == 3
+        # Fully dynamic is in skipped
+        assert len(result.skipped_dynamic) == 1
+    
+    def test_deduplication(self, temp_dir, packager):
+        """Test that duplicate paths across multiple images are deduplicated."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:assets/logo.png",
+            "image:assets/logo.png",  # duplicate
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        assert len(assets) == 1
+        assert assets[0].path == "assets/logo.png"
+    
+    def test_header_images_scanned(self, temp_dir, packager):
+        """Test that images in header XML parts are also scanned."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(
+            docx_path,
+            alt_texts=["image:assets/body-logo.png"],
+            header_alt_texts=["image:assets/header-logo.png"]
+        )
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        paths = [a.path for a in assets]
+        assert "assets/body-logo.png" in paths
+        assert "assets/header-logo.png" in paths
+        assert len(assets) == 2
+    
+    def test_risk_level_ternary(self, temp_dir, packager):
+        """Test risk-level indicator example from handbook."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${ risk > 80 ? 'assets/exclamation.png' : 'assets/info.png' }"
+        ])
+        
+        result = PackageResult(success=False)
+        assets = packager._extract_docx_image_references(docx_path, result)
+        
+        paths = sorted([a.path for a in assets])
+        assert "assets/exclamation.png" in paths
+        assert "assets/info.png" in paths
+
+
+class TestDocxPackageIntegration:
+    """Test full DOCX packaging with image assets."""
+    
+    def test_package_docx_with_static_assets(self, temp_dir, packager):
+        """Test packaging DOCX with static image assets."""
+        # Create DOCX with image reference
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/logo.png"])
+        
+        # Create the referenced asset
+        (temp_dir / "assets").mkdir()
+        (temp_dir / "assets" / "logo.png").write_bytes(b"PNG_DATA")
+        
+        # Package
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path)
+        
+        assert result.success
+        assert result.template_type == "DOCX"
+        assert len(result.assets_found) == 1
+        assert len(result.assets_included) == 1
+        assert len(result.assets_missing) == 0
+        
+        # Verify ZIP contents
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "template.docx" in names
+            assert "assets/logo.png" in names
+    
+    def test_package_docx_missing_asset_reported(self, temp_dir, packager):
+        """Test that missing assets are reported in warnings."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/missing.png"])
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path)
+        
+        assert result.success
+        assert len(result.assets_found) == 1
+        assert len(result.assets_missing) == 1
+        assert len(result.assets_included) == 0
+        assert any("missing.png" in w for w in result.warnings)
+    
+    def test_package_docx_dynamic_directory(self, temp_dir, packager):
+        """Test packaging DOCX with dynamic directory includes all files."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${'assets/signatures/' + manager + '.png'}"
+        ])
+        
+        # Create directory with multiple files
+        sig_dir = temp_dir / "assets" / "signatures"
+        sig_dir.mkdir(parents=True)
+        (sig_dir / "alice.png").write_bytes(b"ALICE")
+        (sig_dir / "bob.png").write_bytes(b"BOB")
+        (sig_dir / "charlie.png").write_bytes(b"CHARLIE")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path)
+        
+        assert result.success
+        assert len(result.assets_included) == 3
+        assert any("Dynamic asset" in w for w in result.warnings)
+        assert any("included all 3 files" in w for w in result.warnings)
+        
+        # Verify ZIP contents
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "template.docx" in names
+            assert "assets/signatures/alice.png" in names
+            assert "assets/signatures/bob.png" in names
+            assert "assets/signatures/charlie.png" in names
+    
+    def test_package_docx_spel_ternary_with_assets(self, temp_dir, packager):
+        """Test packaging DOCX with SpEL ternary, both files exist."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [
+            "image:${ gender == 'F' ? 'assets/female.png' : 'assets/male.png' }"
+        ])
+        
+        # Create both image files
+        (temp_dir / "assets").mkdir()
+        (temp_dir / "assets" / "female.png").write_bytes(b"FEMALE")
+        (temp_dir / "assets" / "male.png").write_bytes(b"MALE")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path)
+        
+        assert result.success
+        assert len(result.assets_included) == 2
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "assets/female.png" in names
+            assert "assets/male.png" in names
+    
+    def test_package_docx_dry_run(self, temp_dir, packager):
+        """Test dry run analyzes assets without creating ZIP."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/logo.png"])
+        
+        # Create asset
+        (temp_dir / "assets").mkdir()
+        (temp_dir / "assets" / "logo.png").write_bytes(b"PNG")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path, dry_run=True)
+        
+        assert result.success
+        assert len(result.assets_found) == 1
+        assert not output_path.exists()  # No ZIP created
+    
+    def test_package_docx_no_images_still_works(self, temp_dir, packager):
+        """Test DOCX without any image references packages correctly."""
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, [])
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path)
+        
+        assert result.success
+        assert len(result.assets_found) == 0
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "template.docx" in names
+    
+    def test_package_docx_with_fonts_and_assets(self, temp_dir, packager):
+        """Test packaging DOCX with both image assets and fonts."""
+        from muban_cli.packager import FontSpec
+        
+        docx_path = temp_dir / "template.docx"
+        _create_docx_with_images(docx_path, ["image:assets/stamp.png"])
+        
+        # Create asset
+        (temp_dir / "assets").mkdir()
+        (temp_dir / "assets" / "stamp.png").write_bytes(b"STAMP")
+        
+        # Create font file
+        font_path = temp_dir / "Arial.ttf"
+        font_path.write_bytes(b"TTF_DATA")
+        fonts = [FontSpec(file_path=font_path, name="Arial", face="normal")]
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(docx_path, output_path, fonts=fonts)
+        
+        assert result.success
+        assert len(result.assets_included) == 1
+        assert len(result.fonts_included) == 1
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "template.docx" in names
+            assert "assets/stamp.png" in names
+            assert "fonts.xml" in names
+            assert "fonts/Arial.ttf" in names
