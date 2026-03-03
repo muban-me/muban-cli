@@ -12,8 +12,11 @@ For JRXML templates, the packager:
 4. Optionally bundles custom fonts with fonts.xml configuration
 
 For DOCX templates, the packager:
-1. Creates a ZIP archive containing the DOCX file
-2. Optionally bundles custom fonts with fonts.xml configuration
+1. Parses the DOCX to find image references in ALT text (image: prefix)
+2. Extracts static file paths and SpEL expression path candidates
+3. Detects dynamic directory patterns (includes all files from directory)
+4. Creates a ZIP archive preserving the directory structure
+5. Optionally bundles custom fonts with fonts.xml configuration
 """
 
 import re
@@ -91,7 +94,10 @@ class JRXMLPackager:
     - Font files
     
     For DOCX templates, the packager:
-    - Creates a ZIP archive containing the DOCX file
+    - Scans images for ALT text starting with 'image:' prefix
+    - Extracts static file paths and SpEL expression path candidates
+    - Detects dynamic directory patterns (includes all files from directory)
+    - Creates a ZIP archive containing the DOCX and referenced assets
     - Optionally bundles custom fonts with fonts.xml configuration
     
     Example usage:
@@ -146,6 +152,31 @@ class JRXMLPackager:
     
     # URL prefixes to skip (remote resources don't need packaging)
     URL_PREFIXES = ('http://', 'https://', 'file://', 'ftp://')
+    
+    # DOCX ALT text patterns for image asset detection
+    # The image: prefix in ALT text marks dynamic image placeholders
+    DOCX_IMAGE_PREFIX = 'image:'
+    
+    # Pattern to detect SpEL expressions ${...} in DOCX image keys
+    DOCX_SPEL_PATTERN = re.compile(r'\$\{.*?\}', re.DOTALL)
+    
+    # Pattern to extract string literals from SpEL (single-quoted per handbook convention)
+    # Also supports double-quoted literals for robustness
+    DOCX_STRING_LITERAL = re.compile(r"""['"]([^'"]+)['"]""")
+    
+    # Pattern for SpEL concatenation with dynamic variable:
+    # "dir/path/" + varName or 'dir/path/' + varName  
+    # Captures: (1) quote char, (2) directory path ending with /, (3) variable name
+    DOCX_DYNAMIC_DIR_SPEL = re.compile(
+        r"""['"]([^'"]+/)['"]\s*\+\s*(\w+)"""
+    )
+    
+    # Pattern to check if a string looks like a file path (contains / or has an extension)
+    DOCX_PATH_LIKE = re.compile(r'[/\\]|\.[a-zA-Z]{2,4}$')
+    
+    # DOCX Open XML namespaces
+    DOCX_WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
+    DOCX_WP14_NS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing'
     
     def __init__(self, reports_dir_param: str = "REPORTS_DIR"):
         """
@@ -209,8 +240,25 @@ class JRXMLPackager:
         
         result.output_path = output_path
         
-        # For DOCX templates, skip asset analysis (no embedded assets to extract)
+        # For DOCX templates, analyze image ALT text for asset references
         if result.template_type == "DOCX":
+            try:
+                assets = self._extract_docx_image_references(template_path, result)
+                result.assets_found = assets
+            except Exception as e:
+                result.errors.append(f"Failed to parse DOCX: {e}")
+                return result
+            
+            # Resolve assets and create ZIP
+            # DOCX assets are resolved relative to the template directory (no REPORTS_DIR)
+            assets_to_include = self._resolve_assets(assets, base_dir, result)
+            
+            # Report findings
+            if assets:
+                logger.info(f"Found {len(result.assets_found)} image asset references in DOCX")
+                logger.info(f"  - Included: {len(result.assets_included)}")
+                logger.info(f"  - Missing: {len(result.assets_missing)}")
+            
             # Store fonts in result
             if fonts_xml_path and fonts_xml_path.exists():
                 parsed_fonts = self._parse_fonts_xml(fonts_xml_path)
@@ -222,9 +270,9 @@ class JRXMLPackager:
                 result.success = True
                 return result
             
-            # Create ZIP archive with just the DOCX file
+            # Create ZIP archive with DOCX file and assets
             try:
-                self._create_zip(template_path, [], output_path, fonts, fonts_xml_path)
+                self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
                 result.success = True
             except Exception as e:
                 result.errors.append(f"Failed to create ZIP: {e}")
@@ -250,13 +298,60 @@ class JRXMLPackager:
             logger.info(f"Detected path parameters: {params_str}")
         
         # Resolve asset paths and check existence
-        # Each asset is resolved relative to: source_file.parent / REPORTS_DIR / asset.path
+        assets_to_include = self._resolve_assets(assets, base_dir, result)
+        
+        # Report findings
+        logger.info(f"Found {len(result.assets_found)} asset references")
+        logger.info(f"  - Included: {len(result.assets_included)}")
+        logger.info(f"  - Missing: {len(result.assets_missing)}")
+        
+        # Store fonts in result - only if not using fonts.xml
+        if fonts_xml_path and fonts_xml_path.exists():
+            parsed_fonts = self._parse_fonts_xml(fonts_xml_path)
+            result.fonts_xml_files = [abs_path for _, abs_path in parsed_fonts if abs_path.exists()]
+        else:
+            result.fonts_included = fonts
+        
+        if dry_run:
+            result.success = True
+            return result
+        
+        # Create ZIP archive
+        try:
+            self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
+            result.success = True
+        except Exception as e:
+            result.errors.append(f"Failed to create ZIP: {e}")
+            return result
+        
+        return result
+    
+    def _resolve_assets(
+        self,
+        assets: List[AssetReference],
+        base_dir: Path,
+        result: PackageResult
+    ) -> List[Tuple[Path, str]]:
+        """
+        Resolve asset references to absolute paths and check existence.
+        
+        Each asset is resolved relative to: source_file.parent / reports_dir_value / asset.path
+        For DOCX assets, reports_dir_value is empty string (paths are relative to template dir).
+        
+        Args:
+            assets: List of asset references to resolve
+            base_dir: Base directory for calculating archive paths
+            result: PackageResult to accumulate warnings/errors
+            
+        Returns:
+            List of (absolute_path, archive_path) tuples for files to include
+        """
         assets_to_include: List[Tuple[Path, str]] = []  # (absolute_path, archive_path)
         
         for asset in assets:
-            # Resolve path using the REPORTS_DIR value from the source file
-            # This simulates: cd source_file.parent && resolve REPORTS_DIR + asset.path
-            # Use string concatenation first (POSIX semantics: "../" + "/path" = "..//path" = "../path")
+            # Resolve path using the reports_dir_value from the source file
+            # For JRXML: cd source_file.parent && resolve REPORTS_DIR + asset.path
+            # For DOCX: cd source_file.parent && resolve asset.path directly
             source_dir = asset.source_file.parent
             combined_path = asset.reports_dir_value + asset.path
             # Normalize double slashes (POSIX: // equals /)
@@ -307,31 +402,149 @@ class JRXMLPackager:
                     f"Asset not found: {archive_path} (referenced in {asset.source_file.name})"
                 )
         
-        # Report findings
-        logger.info(f"Found {len(result.assets_found)} asset references")
-        logger.info(f"  - Included: {len(result.assets_included)}")
-        logger.info(f"  - Missing: {len(result.assets_missing)}")
+        return assets_to_include
+    
+    def _extract_docx_image_references(
+        self,
+        docx_path: Path,
+        result: PackageResult
+    ) -> List[AssetReference]:
+        """
+        Extract image asset references from DOCX ALT text properties.
         
-        # Store fonts in result - only if not using fonts.xml
-        if fonts_xml_path and fonts_xml_path.exists():
-            parsed_fonts = self._parse_fonts_xml(fonts_xml_path)
-            result.fonts_xml_files = [abs_path for _, abs_path in parsed_fonts if abs_path.exists()]
-        else:
-            result.fonts_included = fonts
+        Scans all XML parts of the DOCX file (document, headers, footers) for
+        images whose ALT text starts with 'image:'. The value after the prefix
+        is analyzed to extract file path references:
         
-        if dry_run:
-            result.success = True
-            return result
+        - Static paths: image:assets/logo.png
+        - SpEL ternary: image:${ cond ? 'assets/a.png' : 'assets/b.png' }
+        - SpEL concatenation with dynamic dir: image:${"assets/sigs/" + name + ".png"}
+        - Mixed literal + expression: image:assets/${dept}/stamp.png
+        - Simple keys (no path): image:facsimile (skipped - API-provided)
+        - Fully dynamic: image:${imagePath} (reported as skipped_dynamic)
+        """
+        assets: List[AssetReference] = []
+        seen_paths: Set[str] = set()
         
-        # Create ZIP archive
-        try:
-            self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
-            result.success = True
-        except Exception as e:
-            result.errors.append(f"Failed to create ZIP: {e}")
-            return result
+        with zipfile.ZipFile(docx_path, 'r') as zf:
+            # Scan all XML parts that may contain images
+            xml_parts = [name for name in zf.namelist()
+                         if name.startswith('word/') and name.endswith('.xml')]
+            
+            for part_name in xml_parts:
+                with zf.open(part_name) as f:
+                    try:
+                        tree = ET.parse(f)
+                    except ET.ParseError:
+                        continue
+                    
+                    root = tree.getroot()
+                    
+                    # Find all docPr elements (both wp: and wp14: namespaces)
+                    for ns in (self.DOCX_WP_NS, self.DOCX_WP14_NS):
+                        for doc_pr in root.iter(f'{{{ns}}}docPr'):
+                            descr = doc_pr.get('descr', '')
+                            if not descr.startswith(self.DOCX_IMAGE_PREFIX):
+                                continue
+                            
+                            key = descr[len(self.DOCX_IMAGE_PREFIX):].strip()
+                            if not key:
+                                continue
+                            
+                            self._process_docx_image_key(
+                                key, docx_path, part_name, assets, seen_paths, result
+                            )
         
-        return result
+        return assets
+    
+    def _process_docx_image_key(
+        self,
+        key: str,
+        docx_path: Path,
+        part_name: str,
+        assets: List[AssetReference],
+        seen_paths: Set[str],
+        result: PackageResult
+    ) -> None:
+        """
+        Process a single DOCX image key extracted from ALT text.
+        
+        Classifies the key as static path, SpEL expression, or simple key,
+        and creates appropriate AssetReference entries.
+        """
+        has_spel = self.DOCX_SPEL_PATTERN.search(key)
+        
+        if not has_spel:
+            # No SpEL expression - static key
+            if self.DOCX_PATH_LIKE.search(key):
+                # Looks like a file path - include as static asset
+                if key not in seen_paths:
+                    seen_paths.add(key)
+                    ext = Path(key).suffix.lower()
+                    asset_type = "image" if ext in self.IMAGE_EXTENSIONS else "unknown"
+                    assets.append(AssetReference(
+                        path=key,
+                        source_file=docx_path,
+                        asset_type=asset_type,
+                        reports_dir_value=""  # DOCX paths are relative to template dir
+                    ))
+                    logger.debug(f"DOCX static image asset: {key} (from {part_name})")
+            else:
+                # Simple key (e.g., 'facsimile') - API-provided, nothing to bundle
+                logger.debug(f"DOCX image key (API-provided): {key} (from {part_name})")
+            return
+        
+        # Contains SpEL expression(s)
+        # Check for dynamic directory concatenation pattern:
+        # "dir/path/" + varName + ".ext"  or  'dir/path/' + varName
+        dynamic_match = self.DOCX_DYNAMIC_DIR_SPEL.search(key)
+        if dynamic_match:
+            dir_path = dynamic_match.group(1)  # e.g., "assets/signatures/"
+            var_name = dynamic_match.group(2)  # e.g., "manager"
+            
+            if dir_path not in seen_paths:
+                seen_paths.add(dir_path)
+                assets.append(AssetReference(
+                    path=dir_path,
+                    source_file=docx_path,
+                    asset_type="directory",
+                    is_dynamic_dir=True,
+                    dynamic_param=var_name,
+                    reports_dir_value=""  # DOCX paths are relative to template dir
+                ))
+                logger.debug(
+                    f"DOCX dynamic directory asset: {dir_path}* "
+                    f"(variable: {var_name}, from {part_name})"
+                )
+            return
+        
+        # General SpEL expression - extract string literals as path candidates
+        literals = self.DOCX_STRING_LITERAL.findall(key)
+        path_literals = [lit for lit in literals if self.DOCX_PATH_LIKE.search(lit)]
+        
+        if not path_literals:
+            # No path-like literals found - fully dynamic
+            if key not in result.skipped_dynamic:
+                result.skipped_dynamic.append(key)
+            logger.debug(f"DOCX fully dynamic image expression: {key} (from {part_name})")
+            return
+        
+        # Include each path-like literal as a candidate asset
+        for path in path_literals:
+            # Skip paths that look like directory-only (ending with /)
+            if path.endswith('/'):
+                continue
+            if path not in seen_paths:
+                seen_paths.add(path)
+                ext = Path(path).suffix.lower()
+                asset_type = "image" if ext in self.IMAGE_EXTENSIONS else "unknown"
+                assets.append(AssetReference(
+                    path=path,
+                    source_file=docx_path,
+                    asset_type=asset_type,
+                    reports_dir_value=""  # DOCX paths are relative to template dir
+                ))
+                logger.debug(f"DOCX SpEL image asset candidate: {path} (from {part_name})")
     
     def _extract_asset_references(
         self, 

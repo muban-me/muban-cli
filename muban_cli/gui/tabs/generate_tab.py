@@ -327,10 +327,11 @@ class GenerateTab(QWidget):
         output_group = QGroupBox("Output Options")
         output_layout = QFormLayout(output_group)
 
-        # Format
+        # Format (display uppercase, store lowercase as item data for API calls)
         self.format_combo = QComboBox()
-        self.format_combo.addItems(["pdf", "xlsx", "docx", "rtf", "html", "txt"])
-        self.format_combo.currentTextChanged.connect(self._on_format_changed)
+        for fmt in ["pdf", "xlsx", "docx", "rtf", "html", "txt"]:
+            self.format_combo.addItem(fmt.upper(), fmt)
+        self.format_combo.currentIndexChanged.connect(self._on_format_changed)
         output_layout.addRow("Format:", self.format_combo)
 
         # Output file
@@ -673,17 +674,22 @@ class GenerateTab(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load request: {e}")
 
-    def _on_format_changed(self, format: str):
+    def _get_format(self) -> str:
+        """Get the current format as lowercase string for API calls."""
+        return self.format_combo.currentData() or self.format_combo.currentText().lower()
+    
+    def _on_format_changed(self, index: int):
         """Update output path extension and export options visibility when format changes."""
+        fmt = self._get_format()
         current = self.output_input.text()
         if current:
             path = Path(current)
-            self.output_input.setText(str(path.with_suffix(f".{format}")))
+            self.output_input.setText(str(path.with_suffix(f".{fmt}")))
         self._update_export_options_visibility()
 
     def _update_export_options_visibility(self):
         """Show/hide export options based on selected format."""
-        format = self.format_combo.currentText()
+        format = self._get_format()
         # Only show export options button for formats that have options
         show = format in ("pdf", "html", "txt")
         self.export_options_btn.setVisible(show)
@@ -692,7 +698,7 @@ class GenerateTab(QWidget):
 
     def _browse_output(self):
         """Browse for output file."""
-        format = self.format_combo.currentText()
+        fmt = self._get_format()
         filter_map = {
             "pdf": "PDF Files (*.pdf)",
             "xlsx": "Excel Files (*.xlsx)",
@@ -705,8 +711,8 @@ class GenerateTab(QWidget):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Document As",
-            self.output_input.text() or f"document.{format}",
-            f"{filter_map.get(format, 'All Files (*)')};;All Files (*)",
+            self.output_input.text() or f"document.{fmt}",
+            f"{filter_map.get(fmt, 'All Files (*)')};;All Files (*)",
         )
         if file_path:
             self.output_input.setText(file_path)
@@ -793,7 +799,7 @@ class GenerateTab(QWidget):
         """Open the export options dialog."""
         from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
 
-        format = self.format_combo.currentText()
+        fmt = self._get_format()
         dialog = ExportOptionsDialog(
             parent=self,
             pdf_options=self._pdf_options,
@@ -804,11 +810,11 @@ class GenerateTab(QWidget):
             ignore_pagination=self._ignore_pagination,
         )
         # Switch to the appropriate tab (General is tab 0, PDF is 1, HTML is 2, TXT is 3)
-        if format == "pdf":
+        if fmt == "pdf":
             dialog.tabs.setCurrentIndex(1)
-        elif format == "html":
+        elif fmt == "html":
             dialog.tabs.setCurrentIndex(2)
-        elif format == "txt":
+        elif fmt == "txt":
             dialog.tabs.setCurrentIndex(3)
 
         if dialog.exec():
@@ -821,7 +827,7 @@ class GenerateTab(QWidget):
 
     def _update_export_summary(self):
         """Update the export options summary label."""
-        format = self.format_combo.currentText()
+        format = self._get_format()
         
         # Build general options parts (apply to all formats)
         general_parts = []
@@ -898,10 +904,10 @@ class GenerateTab(QWidget):
         self._set_ui_enabled(False)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self._log(f"Generating {self.format_combo.currentText().upper()}...")
+        self._log(f"Generating {self.format_combo.currentText()}...")
 
         # Get export options based on format
-        format = self.format_combo.currentText()
+        format = self._get_format()
         pdf_options = self._get_pdf_options() if format == "pdf" else None
         html_options = self._get_html_options() if format == "html" else None
         txt_options = self._get_txt_options() if format == "txt" else None
