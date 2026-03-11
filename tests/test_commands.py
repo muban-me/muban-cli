@@ -232,6 +232,12 @@ class TestGenerateCommand:
         assert 'template' in result.output.lower()
         assert 'format' in result.output.lower()
 
+    def test_generate_help_has_duplex_padding(self, runner):
+        """Test generate help includes --pdf-duplex-padding flag."""
+        result = runner.invoke(cli, ['generate', '--help'])
+        assert result.exit_code == 0
+        assert '--pdf-duplex-padding' in result.output
+
 
 class TestGetCommand:
     """Test get template command."""

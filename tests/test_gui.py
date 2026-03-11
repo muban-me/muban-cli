@@ -705,6 +705,33 @@ class TestExportOptionsDialog:
         pdf_opts = dialog.get_pdf_options()
         assert isinstance(pdf_opts, dict)
 
+    def test_export_options_dialog_duplex_padding(self, qtbot):
+        """Test duplexPadding checkbox in PDF export options."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        # Default: unchecked, not included in options
+        dialog = ExportOptionsDialog()
+        qtbot.addWidget(dialog)
+        assert not dialog.pdf_duplex_padding.isChecked()
+        assert dialog.get_pdf_options() is None
+
+        # Check it: should appear in options
+        dialog.pdf_duplex_padding.setChecked(True)
+        pdf_opts = dialog.get_pdf_options()
+        assert pdf_opts is not None
+        assert pdf_opts["duplexPadding"] is True
+
+        # Summary should mention it
+        assert "Duplex padding" in dialog.get_pdf_summary()
+
+    def test_export_options_dialog_duplex_padding_load(self, qtbot):
+        """Test duplexPadding is loaded from stored options."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        dialog = ExportOptionsDialog(pdf_options={"duplexPadding": True})
+        qtbot.addWidget(dialog)
+        assert dialog.pdf_duplex_padding.isChecked()
+
     def test_export_options_dialog_txt_defaults(self, qtbot):
         """Test TXT tab default values return None (no custom options)."""
         from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog

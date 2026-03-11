@@ -45,6 +45,7 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option('--pdf-pdfa', type=click.Choice(['PDF/A-1a', 'PDF/A-1b', 'PDF/A-2a', 'PDF/A-2b', 'PDF/A-3a', 'PDF/A-3b']), help='PDF/A conformance')
     @click.option('--pdf-password', help='PDF user password')
     @click.option('--pdf-owner-password', help='PDF owner password')
+    @click.option('--pdf-duplex-padding', is_flag=True, help='Pad PDF to even page count for duplex printing')
     @click.option('--txt-char-width', type=float, help='TXT character cell width in pixels (default: 8.0)')
     @click.option('--txt-char-height', type=float, help='TXT character cell height in pixels (default: 13.948)')
     @click.option('--txt-page-width-chars', type=int, help='TXT page width in characters (overrides char width)')
@@ -72,6 +73,7 @@ def register_generate_commands(cli: click.Group) -> None:
         pdf_pdfa: Optional[str],
         pdf_password: Optional[str],
         pdf_owner_password: Optional[str],
+        pdf_duplex_padding: bool,
         txt_char_width: Optional[float],
         txt_char_height: Optional[float],
         txt_page_width_chars: Optional[int],
@@ -172,7 +174,7 @@ def register_generate_commands(cli: click.Group) -> None:
         
         # Build PDF options
         pdf_options = None
-        if any([pdf_pdfa, pdf_password, pdf_owner_password]):
+        if any([pdf_pdfa, pdf_password, pdf_owner_password, pdf_duplex_padding]):
             pdf_options = {}
             if pdf_pdfa:
                 pdf_options['pdfaConformance'] = pdf_pdfa
@@ -180,6 +182,8 @@ def register_generate_commands(cli: click.Group) -> None:
                 pdf_options['userPassword'] = pdf_password
             if pdf_owner_password:
                 pdf_options['ownerPassword'] = pdf_owner_password
+            if pdf_duplex_padding:
+                pdf_options['duplexPadding'] = True
         
         # Build TXT options
         txt_options = None

@@ -369,6 +369,7 @@ muban generate TEMPLATE_ID --data-file data.json
 # PDF options
 muban generate TEMPLATE_ID --pdf-pdfa PDF/A-1b --locale pl_PL
 muban generate TEMPLATE_ID --pdf-password secret123
+muban generate TEMPLATE_ID --pdf-duplex-padding  # Pad to even pages for double-sided printing
 
 # General export options
 muban generate TEMPLATE_ID --locale de_DE         # Document locale for formatting
@@ -647,7 +648,7 @@ The GUI provides a tabbed interface with the following sections:
 - Provide JSON data sources
 - Configure export options:
   - **General options**: Document locale for number/date/currency formatting, ignore pagination for continuous output
-  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings
+  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding
   - **HTML options**: Resource embedding, single-file output, custom CSS
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem

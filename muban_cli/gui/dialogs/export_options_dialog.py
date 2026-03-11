@@ -174,6 +174,19 @@ class ExportOptionsDialog(QDialog):
         perms_layout.addLayout(perms_row2)
         pdf_layout.addWidget(perms_group)
 
+        # Printing Group
+        printing_group = QGroupBox("Printing")
+        printing_layout = QVBoxLayout(printing_group)
+
+        self.pdf_duplex_padding = QCheckBox("Duplex Padding")
+        self.pdf_duplex_padding.setChecked(False)
+        self.pdf_duplex_padding.setToolTip(
+            "Pad document to an even number of pages for duplex (double-sided) printing.\n"
+            "When enabled, appends a blank page if the page count is odd."
+        )
+        printing_layout.addWidget(self.pdf_duplex_padding)
+        pdf_layout.addWidget(printing_group)
+
         pdf_layout.addStretch()
         self.tabs.addTab(pdf_widget, "PDF")
 
@@ -358,6 +371,8 @@ class ExportOptionsDialog(QDialog):
             self.pdf_can_assemble.setChecked(pdf["canAssemble"])
         if "canPrintHighQuality" in pdf:
             self.pdf_high_quality_print.setChecked(pdf["canPrintHighQuality"])
+        if "duplexPadding" in pdf:
+            self.pdf_duplex_padding.setChecked(pdf["duplexPadding"])
 
         # HTML options
         html = self._html_options
@@ -453,6 +468,9 @@ class ExportOptionsDialog(QDialog):
             options["canAssemble"] = self.pdf_can_assemble.isChecked()
             options["encryptionKeyLength"] = int(self.pdf_encryption_combo.currentText())
 
+        if self.pdf_duplex_padding.isChecked():
+            options["duplexPadding"] = True
+
         return options if options else None
 
     def get_html_options(self) -> Optional[Dict[str, Any]]:
@@ -475,6 +493,8 @@ class ExportOptionsDialog(QDialog):
             parts.append(f"ICC: {self.icc_combo.currentText()}")
         if self.pdf_user_password.text() or self.pdf_owner_password.text():
             parts.append("Encrypted")
+        if self.pdf_duplex_padding.isChecked():
+            parts.append("Duplex padding")
         return ", ".join(parts) if parts else "Default"
 
     def get_html_summary(self) -> str:
