@@ -3,6 +3,7 @@ Async Operations API - Asynchronous document generation.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from ._http import HTTPClient
@@ -137,3 +138,58 @@ class AsyncOpsAPI:
         if since:
             params["since"] = since.isoformat()
         return self._http.request("GET", "async/errors", params=params)
+
+    def get_result(
+        self,
+        request_id: str,
+        include_content: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get async result status.
+        
+        Args:
+            request_id: Request UUID
+            include_content: Include base64 document content in response
+        
+        Returns:
+            AsyncResultDto with status, metadata, and optionally base64 content
+        """
+        params: Dict[str, Any] = {}
+        if include_content:
+            params["includeContent"] = "true"
+        return self._http.request(
+            "GET", f"async/results/{request_id}",
+            params=params if params else None,
+            expected_status=[200, 202]
+        )
+
+    def download_result(
+        self,
+        request_id: str,
+        output_path: Path
+    ) -> Path:
+        """
+        Download the generated document for a completed async request.
+        
+        Args:
+            request_id: Request UUID
+            output_path: Path to save the downloaded file
+        
+        Returns:
+            Path to the downloaded file
+        """
+        return self._http.download(f"async/results/{request_id}/download", output_path)
+
+    def acknowledge_result(self, request_id: str) -> Dict[str, Any]:
+        """
+        Acknowledge and remove a result from the queue.
+        
+        This is a DESTRUCTIVE operation - the message is permanently removed.
+        
+        Args:
+            request_id: Request UUID
+        
+        Returns:
+            Acknowledgement response
+        """
+        return self._http.request("DELETE", f"async/results/{request_id}")

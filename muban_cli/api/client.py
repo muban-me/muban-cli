@@ -416,7 +416,23 @@ class MubanAPIClient:
     ) -> Dict[str, Any]:
         """Get async error log (admin only)."""
         return self.async_ops.get_errors(since, page, size)
-    
+
+    def get_async_result(
+        self,
+        request_id: str,
+        include_content: bool = False
+    ) -> Dict[str, Any]:
+        """Get async result status."""
+        return self.async_ops.get_result(request_id, include_content)
+
+    def download_async_result(self, request_id: str, output_path: Path) -> Path:
+        """Download the generated document for a completed async request."""
+        return self.async_ops.download_result(request_id, output_path)
+
+    def acknowledge_async_result(self, request_id: str) -> Dict[str, Any]:
+        """Acknowledge and remove a result from the queue."""
+        return self.async_ops.acknowledge_result(request_id)
+
     # ========== Context Manager ==========
     
     def close(self) -> None:

@@ -147,6 +147,8 @@ def register_async_commands(cli: click.Group) -> None:
     @click.option('--data-file', '-d', type=click.Path(exists=True, path_type=Path),
                   help='JSON file with parameters')
     @click.option('--correlation-id', '-c', help='Correlation ID for tracking')
+    @click.option('--reply-queue', '-Q', default='document.generation.replies.http',
+                  show_default=True, help='JMS reply queue for result delivery')
     @pass_context
     @require_config
     def async_submit(
@@ -159,7 +161,8 @@ def register_async_commands(cli: click.Group) -> None:
         output_fmt: str,
         param: tuple,
         data_file: Optional[Path],
-        correlation_id: Optional[str]
+        correlation_id: Optional[str],
+        reply_queue: str,
     ):
         """
         Submit a single async document generation request.
@@ -168,6 +171,7 @@ def register_async_commands(cli: click.Group) -> None:
         Examples:
           muban async submit -t abc123 -F PDF -p name=John
           muban async submit -t abc123 -d params.json -c my-request-001
+          muban async submit -t abc123 -Q my-custom-reply-queue
         """
         setup_logging(verbose, quiet)
         
@@ -201,7 +205,8 @@ def register_async_commands(cli: click.Group) -> None:
         request_item = {
             "templateId": template,
             "format": output_fmt,
-            "parameters": parameters
+            "parameters": parameters,
+            "replyQueue": reply_queue,
         }
         if correlation_id:
             request_item["correlationId"] = correlation_id
@@ -441,6 +446,93 @@ def register_async_commands(cli: click.Group) -> None:
                     
         except PermissionDeniedError:
             print_error("Permission denied. Admin role required.")
+            sys.exit(1)
+        except MubanError as e:
+            print_error(str(e))
+            sys.exit(1)
+
+    @async_group.command('result')
+    @common_options
+    @click.argument('request_id')
+    @click.option('--output', '-o', type=click.Path(path_type=Path), help='Output file path')
+    @click.option('--ack', is_flag=True, help='Acknowledge and remove result from queue after download')
+    @pass_context
+    @require_config
+    def async_result(
+        ctx: MubanContext,
+        verbose: bool,
+        quiet: bool,
+        output_format: str,
+        truncate_length: int,
+        request_id: str,
+        output: Optional[Path],
+        ack: bool,
+    ):
+        """
+        Download the result of a completed async request.
+
+        Checks the request status first. If COMPLETED, downloads the generated
+        document. Use --ack to remove the result from the queue after download.
+
+        \b
+        Examples:
+          muban async result abc123-uuid
+          muban async result abc123-uuid -o report.pdf
+          muban async result abc123-uuid --ack
+          muban async result abc123-uuid --format json
+        """
+        setup_logging(verbose, quiet)
+
+        try:
+            with MubanAPIClient(ctx.config_manager.get()) as client:
+                # Check status first
+                status_result = client.get_async_result(request_id)
+                data = status_result.get("data", status_result)
+
+                status = data.get("status", "UNKNOWN")
+
+                if output_format == 'json' and not output:
+                    print_json(data)
+                    return
+
+                if status == "COMPLETED":
+                    # Determine output path
+                    if not output:
+                        filename = data.get("filename")
+                        if filename:
+                            output = Path(filename)
+                        else:
+                            fmt = (data.get("format") or "pdf").lower()
+                            output = Path(f"{request_id}.{fmt}")
+
+                    output_path = client.download_async_result(request_id, output)
+                    file_size = data.get("fileSize")
+                    size_info = f" ({file_size:,} bytes)" if file_size else ""
+                    print_success(f"Downloaded: {output_path}{size_info}")
+
+                    if ack:
+                        client.acknowledge_async_result(request_id)
+                        if not quiet:
+                            print_info("Result acknowledged and removed from queue.")
+
+                elif status in ("QUEUED", "PROCESSING"):
+                    print_info(f"Request is still {status}. Try again later.")
+
+                elif status == "FAILED":
+                    error = data.get("error") or data.get("errorCode") or "Unknown error"
+                    print_error(f"Request failed: {error}")
+                    sys.exit(1)
+
+                elif status == "TIMEOUT":
+                    print_error("Request timed out during processing.")
+                    sys.exit(1)
+
+                else:
+                    print_error(f"Unexpected status: {status}")
+                    sys.exit(1)
+
+        except PermissionDeniedError:
+            print_error("Permission denied.")
             sys.exit(1)
         except MubanError as e:
             print_error(str(e))

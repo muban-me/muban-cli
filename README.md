@@ -455,10 +455,17 @@ muban admin server-config
 # Submit a single async request
 muban async submit -t TEMPLATE_ID -F PDF -p title="Report"
 muban async submit -t TEMPLATE_ID -d params.json -c my-correlation-id
+muban async submit -t TEMPLATE_ID -Q my-custom-reply-queue   # Custom reply queue
 
 # Submit bulk requests from JSON file
 muban async bulk requests.json
 muban async bulk requests.json --batch-id batch-2026-01-15
+
+# Download result of a completed async request
+muban async result REQUEST_ID                    # Auto-derives filename from response
+muban async result REQUEST_ID -o report.pdf      # Save to specific path
+muban async result REQUEST_ID --ack              # Download and remove from queue
+muban async result REQUEST_ID --format json      # Show status as JSON
 
 # List async requests
 muban async list
@@ -485,13 +492,15 @@ muban async errors --since 24h
   {
     "templateId": "abc123-uuid",
     "format": "PDF",
-    "parameters": {"title": "Report 1"},
-    "correlationId": "req-001"
+    "parameters": [{"name": "title", "value": "Report 1"}],
+    "correlationId": "req-001",
+    "replyQueue": "document.generation.replies.http"
   },
   {
     "templateId": "abc123-uuid",
     "format": "XLSX",
-    "parameters": {"title": "Report 2"}
+    "parameters": [{"name": "title", "value": "Report 2"}],
+    "replyQueue": "document.generation.replies.http"
   }
 ]
 ```
