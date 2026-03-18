@@ -141,7 +141,7 @@ def register_async_commands(cli: click.Group) -> None:
     @common_options
     @click.option('--template', '-t', required=True, help='Template ID')
     @click.option('--doc-format', '-F', 'output_fmt', default='PDF', 
-                  type=click.Choice(['PDF', 'DOCX', 'XLSX', 'HTML', 'CSV', 'XML', 'JSON', 'TEXT']),
+                  type=click.Choice(['PDF', 'XLSX', 'DOCX', 'RTF', 'HTML', 'TXT'], case_sensitive=False),
                   help='Document output format')
     @click.option('--param', '-p', multiple=True, help='Parameter in name=value format')
     @click.option('--data-file', '-d', type=click.Path(exists=True, path_type=Path),
@@ -172,24 +172,30 @@ def register_async_commands(cli: click.Group) -> None:
         setup_logging(verbose, quiet)
         
         # Build parameters
-        parameters = {}
+        parameters = []
         
         # Load from file if provided
         if data_file:
             try:
                 with open(data_file, 'r') as f:
-                    parameters = json.load(f)
+                    file_data = json.load(f)
+                if isinstance(file_data, list):
+                    # Already in [{name, value}] format
+                    parameters = file_data
+                elif isinstance(file_data, dict):
+                    # Convert {key: value} to [{name, value}] format
+                    parameters = [{"name": k, "value": v} for k, v in file_data.items()]
             except (json.JSONDecodeError, IOError) as e:
                 print_error(f"Failed to load parameters file: {e}")
                 sys.exit(1)
         
-        # Override with command line params
+        # Add command line params
         for p in param:
             if '=' not in p:
                 print_error(f"Invalid parameter format: {p}. Use name=value")
                 sys.exit(1)
             name, value = p.split('=', 1)
-            parameters[name.strip()] = value.strip()
+            parameters.append({"name": name.strip(), "value": value.strip()})
         
         # Build request
         request_item = {
@@ -207,19 +213,19 @@ def register_async_commands(cli: click.Group) -> None:
                 if output_format == 'json':
                     print_json(result)
                 else:
-                    submitted = result.get("submitted", 0)
-                    failed = result.get("failed", 0)
+                    data = result.get("data", {})
+                    success_count = data.get("successCount", 0)
                     
-                    if submitted > 0:
-                        tracking_ids = result.get("trackingIds", [])
-                        print_success(f"Request submitted successfully!")
-                        if tracking_ids:
-                            click.echo(f"  Tracking ID: {tracking_ids[0]}")
+                    if success_count > 0:
+                        queued = data.get("queuedRequests", [])
+                        print_success("Request submitted successfully!")
+                        if queued:
+                            click.echo(f"  Request ID: {queued[0].get('requestId', 'N/A')}")
                     else:
-                        errors = result.get("errors", [])
+                        failed_reqs = data.get("failedRequests", [])
                         print_error("Request failed to submit")
-                        for err in errors:
-                            click.echo(f"  Error: {err}")
+                        for req in failed_reqs:
+                            click.echo(f"  Error: {req.get('errorMessage', 'Unknown error')}")
                     
         except PermissionDeniedError:
             print_error("Permission denied. This operation requires appropriate permissions.")
@@ -281,23 +287,24 @@ def register_async_commands(cli: click.Group) -> None:
                 if output_format == 'json':
                     print_json(result)
                 else:
-                    submitted = result.get("submitted", 0)
-                    failed = result.get("failed", 0)
+                    data = result.get("data", {})
+                    success_count = data.get("successCount", 0)
+                    failed_count = data.get("failedCount", 0)
                     
-                    print_success(f"Bulk submission completed!")
-                    click.echo(f"  Submitted: {submitted}")
-                    click.echo(f"  Failed: {failed}")
+                    print_success("Bulk submission completed!")
+                    click.echo(f"  Submitted: {success_count}")
+                    click.echo(f"  Failed: {failed_count}")
                     
                     if batch_id:
                         click.echo(f"  Batch ID: {batch_id}")
                     
-                    errors = result.get("errors", [])
-                    if errors and not quiet:
+                    failed_reqs = data.get("failedRequests", [])
+                    if failed_reqs and not quiet:
                         click.echo("\nErrors:")
-                        for err in errors[:10]:  # Show first 10 errors
-                            click.echo(f"  • {err}")
-                        if len(errors) > 10:
-                            click.echo(f"  ... and {len(errors) - 10} more errors")
+                        for req in failed_reqs[:10]:
+                            click.echo(f"  • [{req.get('errorCode', '?')}] {req.get('errorMessage', 'Unknown error')}")
+                        if len(failed_reqs) > 10:
+                            click.echo(f"  ... and {len(failed_reqs) - 10} more errors")
                     
         except PermissionDeniedError:
             print_error("Permission denied. This operation requires appropriate permissions.")

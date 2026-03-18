@@ -11,7 +11,7 @@
         "license": {
             "name": "S-MIT (Selective MIT)"
         },
-        "version": "1.12.0"
+        "version": "1.12.1"
     },
     "servers": [
         {
@@ -1153,6 +1153,12 @@
                     "required": true
                 },
                 "responses": {
+                    "400": {
+                        "description": "Invalid credentials or JWT disabled",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
                     "200": {
                         "description": "Login successful",
                         "content": {
@@ -1161,12 +1167,6 @@
                                     "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid credentials or JWT disabled",
-                        "content": {
-                            "application/json": {}
                         }
                     }
                 }
@@ -1223,22 +1223,22 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "Bulk submission processed (check response for individual failures)",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BulkAsyncResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid request format",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoBulkAsyncResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Bulk submission processed (check response for individual failures)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkAsyncResponseDto"
                                 }
                             }
                         }
@@ -1302,22 +1302,22 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Integrity verified successfully - file is unchanged",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "422": {
                         "description": "Integrity violation - file may have been tampered with",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoString"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Integrity verified successfully - file is unchanged",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -1381,6 +1381,16 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Digest regenerated successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
+                                }
+                            }
+                        }
+                    },
                     "404": {
                         "description": "Template not found",
                         "content": {
@@ -1397,16 +1407,6 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoString"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Digest regenerated successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -1448,16 +1448,6 @@
                 "description": "Recalculates and updates HMAC-SHA256 digests for all templates in the system. Use this operation after changing the file.integrity.secret-key configuration or when migrating templates. Returns a map with template IDs as keys and status ('SUCCESS' or error message) as values. Returns 200 for all success, 500 for all failures, or 207 Multi-Status for partial success. (Admin role required)",
                 "operationId": "regenerateAllDigests",
                 "responses": {
-                    "207": {
-                        "description": "Multi-Status - some digests regenerated successfully, some failed",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "All digest regenerations failed",
                         "content": {
@@ -1484,6 +1474,16 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoMapStringString"
+                                }
+                            }
+                        }
+                    },
+                    "207": {
+                        "description": "Multi-Status - some digests regenerated successfully, some failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -2103,14 +2103,14 @@
                 "description": "Handle successful OAuth2 authentication and provide token information",
                 "operationId": "oauth2Success",
                 "responses": {
-                    "200": {
-                        "description": "OAuth2 authentication successful",
+                    "401": {
+                        "description": "OAuth2 authentication failed or session expired",
                         "content": {
                             "application/json": {}
                         }
                     },
-                    "401": {
-                        "description": "OAuth2 authentication failed or session expired",
+                    "200": {
+                        "description": "OAuth2 authentication successful",
                         "content": {
                             "application/json": {}
                         }
@@ -3149,6 +3149,16 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Result found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AsyncResultDto"
+                                }
+                            }
+                        }
+                    },
                     "202": {
                         "description": "Request is still being processed",
                         "content": {
@@ -3175,16 +3185,6 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoAsyncResultDto"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Result found",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AsyncResultDto"
                                 }
                             }
                         }
@@ -3523,22 +3523,22 @@
                 "description": "Returns queue depth, performance metrics, throughput, and error rates for async document generation",
                 "operationId": "getMetrics",
                 "responses": {
-                    "403": {
-                        "description": "Access denied - requires ROLE_ADMIN",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDtoAsyncMetricsDto"
-                                }
-                            }
-                        }
-                    },
                     "200": {
                         "description": "Metrics retrieved successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/AsyncMetricsDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Access denied - requires ROLE_ADMIN",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoAsyncMetricsDto"
                                 }
                             }
                         }
@@ -4163,6 +4163,11 @@
                             256
                         ],
                         "default": 128
+                    },
+                    "fontEmbeddingSubstitute": {
+                        "type": "string",
+                        "description": "Font family name to substitute for non-embedded base-14 fonts (e.g., Helvetica, Courier, Times). When set, all non-embedded Type 1 fonts in the generated PDF are replaced with the specified embedded TrueType font. The font must be available via fonts.xml in the template package or installed on the server. Leave empty to skip.",
+                        "example": "DejaVu Sans"
                     },
                     "duplexPadding": {
                         "type": "boolean",

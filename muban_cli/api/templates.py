@@ -297,7 +297,7 @@ class TemplatesAPI:
         
         Args:
             template_id: Template UUID
-            output_format: Output format (pdf, xlsx, docx, rtf, html)
+            output_format: Output format (pdf, xlsx, docx, rtf, html, txt)
             request_data: Full request body as dict
             output_path: Optional output path
         

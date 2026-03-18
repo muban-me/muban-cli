@@ -107,7 +107,7 @@ class MubanMainWindow(QMainWindow):
             "<ul>"
             "<li>Package JRXML templates with dependencies</li>"
             "<li>Manage templates on the server</li>"
-            "<li>Generate PDF, XLSX, DOCX documents</li>"
+            "<li>Generate PDF, XLSX, DOCX, RTF, HTML, TXT documents</li>"
             "<li>Configure server and authentication</li>"
             "</ul>"
             "<p><a href='https://muban.me'>https://muban.me</a></p>"
