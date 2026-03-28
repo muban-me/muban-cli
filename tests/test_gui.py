@@ -907,7 +907,7 @@ class TestTagsDialog:
         assert result[0]["key"] == "env"
         assert result[0]["value"] == "staging"
 
-    def test_tags_dialog_max_tags(self, qtbot):
+    def test_tags_dialog_max_tags(self, qtbot, mocker):
         """Test cannot exceed max tags limit."""
         from muban_cli.gui.dialogs.tags_dialog import TagsDialog, MAX_TAGS
 
@@ -916,7 +916,9 @@ class TestTagsDialog:
         qtbot.addWidget(dialog)
 
         assert dialog.table.rowCount() == MAX_TAGS
-        dialog._add_row()  # Should not add (shows warning)
+        mocker.patch.object(dialog, '_add_row', wraps=dialog._add_row)
+        mocker.patch('muban_cli.gui.dialogs.tags_dialog.QMessageBox.warning')
+        dialog._add_row()  # Should not add (shows warning, now mocked)
         assert dialog.table.rowCount() == MAX_TAGS
 
 

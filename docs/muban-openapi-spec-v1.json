@@ -1433,6 +1433,12 @@
                     "required": true
                 },
                 "responses": {
+                    "400": {
+                        "description": "Invalid credentials or JWT disabled",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
                     "200": {
                         "description": "Login successful",
                         "content": {
@@ -1441,12 +1447,6 @@
                                     "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid credentials or JWT disabled",
-                        "content": {
-                            "application/json": {}
                         }
                     }
                 }
@@ -1728,8 +1728,8 @@
                 "description": "Recalculates and updates HMAC-SHA256 digests for all templates in the system. Use this operation after changing the file.integrity.secret-key configuration or when migrating templates. Returns a map with template IDs as keys and status ('SUCCESS' or error message) as values. Returns 200 for all success, 500 for all failures, or 207 Multi-Status for partial success. (Admin role required)",
                 "operationId": "regenerateAllDigests",
                 "responses": {
-                    "500": {
-                        "description": "All digest regenerations failed",
+                    "200": {
+                        "description": "All digests regenerated successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1738,8 +1738,8 @@
                             }
                         }
                     },
-                    "207": {
-                        "description": "Multi-Status - some digests regenerated successfully, some failed",
+                    "500": {
+                        "description": "All digest regenerations failed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1758,8 +1758,8 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "All digests regenerated successfully",
+                    "207": {
+                        "description": "Multi-Status - some digests regenerated successfully, some failed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -2395,14 +2395,14 @@
                 "description": "Handle successful OAuth2 authentication and provide token information",
                 "operationId": "oauth2Success",
                 "responses": {
-                    "200": {
-                        "description": "OAuth2 authentication successful",
+                    "401": {
+                        "description": "OAuth2 authentication failed or session expired",
                         "content": {
                             "application/json": {}
                         }
                     },
-                    "401": {
-                        "description": "OAuth2 authentication failed or session expired",
+                    "200": {
+                        "description": "OAuth2 authentication successful",
                         "content": {
                             "application/json": {}
                         }
@@ -4774,6 +4774,12 @@
                     },
                     "templateType": {
                         "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TagDto"
+                        }
                     }
                 }
             },
