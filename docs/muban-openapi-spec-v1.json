@@ -11,7 +11,7 @@
         "license": {
             "name": "S-MIT (Selective MIT)"
         },
-        "version": "1.12.1"
+        "version": "1.14.0"
     },
     "servers": [
         {
@@ -587,6 +587,286 @@
                 }
             }
         },
+        "/api/v1/templates/{id}/tags": {
+            "get": {
+                "tags": [
+                    "Templates"
+                ],
+                "summary": "Get template tags",
+                "description": "Retrieve all tags for a template. Tags are mutable operational attributes (e.g. lifecycle phase, department) independent of the immutable template content.",
+                "operationId": "getTemplateTags",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Template ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Template not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Tags retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Templates"
+                ],
+                "summary": "Replace template tags",
+                "description": "Replace all tags on a template (idempotent). Requires manager role. Sends the complete desired tag set — any existing tags not in the list are removed.",
+                "operationId": "replaceTemplateTags",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Template ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateTagsRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Template not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - manager role required",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid tag format or validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Tags replaced successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Templates"
+                ],
+                "summary": "Add or update template tags",
+                "description": "Additively upsert tags on a template (concurrent-safe). For each tag: if a tag with the same key exists, its value is updated; otherwise a new tag is created. Existing tags with other keys are not affected.",
+                "operationId": "addTemplateTags",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Template ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateTagsRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Template not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - manager role required",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Tags added/updated successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid tag format or validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoListTagDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Templates"
+                ],
+                "summary": "Delete all template tags",
+                "description": "Remove all tags from a template (manager role required)",
+                "operationId": "deleteTemplateTags",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Template ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Tags cleared successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Template not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - manager role required",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users": {
             "get": {
                 "tags": [
@@ -1153,12 +1433,6 @@
                     "required": true
                 },
                 "responses": {
-                    "400": {
-                        "description": "Invalid credentials or JWT disabled",
-                        "content": {
-                            "application/json": {}
-                        }
-                    },
                     "200": {
                         "description": "Login successful",
                         "content": {
@@ -1167,6 +1441,12 @@
                                     "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid credentials or JWT disabled",
+                        "content": {
+                            "application/json": {}
                         }
                     }
                 }
@@ -1223,22 +1503,22 @@
                     "required": true
                 },
                 "responses": {
-                    "400": {
-                        "description": "Invalid request format",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDtoBulkAsyncResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "200": {
                         "description": "Bulk submission processed (check response for individual failures)",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/BulkAsyncResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoBulkAsyncResponseDto"
                                 }
                             }
                         }
@@ -1381,22 +1661,22 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Digest regenerated successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Template not found",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoString"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Digest regenerated successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -1458,8 +1738,8 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "All digests regenerated successfully",
+                    "207": {
+                        "description": "Multi-Status - some digests regenerated successfully, some failed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1478,8 +1758,8 @@
                             }
                         }
                     },
-                    "207": {
-                        "description": "Multi-Status - some digests regenerated successfully, some failed",
+                    "200": {
+                        "description": "All digests regenerated successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1668,6 +1948,18 @@
                                 "JASPER",
                                 "DOCX"
                             ]
+                        }
+                    },
+                    {
+                        "name": "tags",
+                        "in": "query",
+                        "description": "Filter by tags in key:value format (comma-separated, AND logic). Example: tags=phase:prod,department:finance. Use key: prefix to match any value for a key.",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
                         }
                     }
                 ],
@@ -2103,14 +2395,14 @@
                 "description": "Handle successful OAuth2 authentication and provide token information",
                 "operationId": "oauth2Success",
                 "responses": {
-                    "401": {
-                        "description": "OAuth2 authentication failed or session expired",
+                    "200": {
+                        "description": "OAuth2 authentication successful",
                         "content": {
                             "application/json": {}
                         }
                     },
-                    "200": {
-                        "description": "OAuth2 authentication successful",
+                    "401": {
+                        "description": "OAuth2 authentication failed or session expired",
                         "content": {
                             "application/json": {}
                         }
@@ -2503,6 +2795,11 @@
                                 "TEMPLATE_GENERATED",
                                 "TEMPLATE_PARAMS_ACCESSED",
                                 "TEMPLATE_FIELDS_ACCESSED",
+                                "TEMPLATE_TAGS_ACCESSED",
+                                "TEMPLATE_TAGS_UPDATED",
+                                "TEMPLATE_TAGS_ADDED",
+                                "TEMPLATE_TAGS_DELETED",
+                                "TEMPLATE_TAG_KEY_DELETED",
                                 "INTEGRITY_DIGEST_REGENERATED",
                                 "INTEGRITY_CHECK_PERFORMED",
                                 "INTEGRITY_CHECK_PASSED",
@@ -3149,22 +3446,22 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Result found",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AsyncResultDto"
-                                }
-                            }
-                        }
-                    },
                     "202": {
                         "description": "Request is still being processed",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoAsyncResultDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Result found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AsyncResultDto"
                                 }
                             }
                         }
@@ -3658,6 +3955,79 @@
                     }
                 ]
             }
+        },
+        "/api/v1/templates/{id}/tags/{key}": {
+            "delete": {
+                "tags": [
+                    "Templates"
+                ],
+                "summary": "Delete a single template tag by key",
+                "description": "Remove a specific tag identified by its key from a template (manager role required)",
+                "operationId": "deleteTemplateTagByKey",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Template ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "key",
+                        "in": "path",
+                        "description": "Tag key to remove",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Template not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - manager role required",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "Tag removed successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDtoVoid"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -3856,6 +4226,70 @@
                 "properties": {
                     "message": {
                         "type": "string"
+                    }
+                }
+            },
+            "TagDto": {
+                "required": [
+                    "key",
+                    "value"
+                ],
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "maxLength": 64,
+                        "minLength": 0,
+                        "pattern": "^[a-zA-Z0-9_-]+$",
+                        "type": "string",
+                        "description": "Tag key (category)",
+                        "example": "phase"
+                    },
+                    "value": {
+                        "maxLength": 255,
+                        "minLength": 0,
+                        "pattern": "^[a-zA-Z0-9_.\\-]+$",
+                        "type": "string",
+                        "description": "Tag value",
+                        "example": "prod"
+                    }
+                },
+                "description": "Key-value tag associated with a template"
+            },
+            "UpdateTagsRequestDto": {
+                "required": [
+                    "tags"
+                ],
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "maxItems": 20,
+                        "minItems": 0,
+                        "type": "array",
+                        "description": "Complete list of tags to set (replaces all existing tags)",
+                        "items": {
+                            "$ref": "#/components/schemas/TagDto"
+                        }
+                    }
+                },
+                "description": "Request to replace all tags on a template"
+            },
+            "ApiResponseDtoListTagDto": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/ApiMetaDto"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TagDto"
+                        }
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ApiErrorDto"
+                        }
                     }
                 }
             },
@@ -4168,6 +4602,23 @@
                         "type": "string",
                         "description": "Font family name to substitute for non-embedded base-14 fonts (e.g., Helvetica, Courier, Times). When set, all non-embedded Type 1 fonts in the generated PDF are replaced with the specified embedded TrueType font. The font must be available via fonts.xml in the template package or installed on the server. Leave empty to skip.",
                         "example": "DejaVu Sans"
+                    },
+                    "imageCompressionQuality": {
+                        "type": "number",
+                        "description": "JPEG quality (0.0–1.0) for post-processing image compression. When set, large lossless-encoded images in the PDF are re-compressed as JPEG. Only colour RGB images above a minimum pixel threshold are converted; small icons, masks, and already-JPEG images are left untouched. Leave empty to skip image optimisation.",
+                        "format": "float",
+                        "example": 0.85
+                    },
+                    "cmykConversionProfile": {
+                        "type": "string",
+                        "description": "ICC profile name for converting RGB images to CMYK colour space. When set, all RGB raster images are converted to CMYK using the specified ICC colour profile for accurate print reproduction. Profile must be available in classpath:icc/. Leave empty to keep original colour space.",
+                        "example": "coated-fogra39"
+                    },
+                    "flattenTransparency": {
+                        "type": "boolean",
+                        "description": "Remove unnecessary transparency groups from PDF pages. JasperReports/FOP often inject /Group /Transparency on every page even when no real transparency is used, slowing print RIP processing. When true, redundant transparency groups are stripped. Default is false.",
+                        "example": false,
+                        "default": false
                     },
                     "duplexPadding": {
                         "type": "boolean",
@@ -5053,6 +5504,11 @@
                             "TEMPLATE_GENERATED",
                             "TEMPLATE_PARAMS_ACCESSED",
                             "TEMPLATE_FIELDS_ACCESSED",
+                            "TEMPLATE_TAGS_ACCESSED",
+                            "TEMPLATE_TAGS_UPDATED",
+                            "TEMPLATE_TAGS_ADDED",
+                            "TEMPLATE_TAGS_DELETED",
+                            "TEMPLATE_TAG_KEY_DELETED",
                             "INTEGRITY_DIGEST_REGENERATED",
                             "INTEGRITY_CHECK_PERFORMED",
                             "INTEGRITY_CHECK_PASSED",

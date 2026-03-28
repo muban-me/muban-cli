@@ -74,10 +74,11 @@ class MubanAPIClient:
         search: Optional[str] = None,
         description: Optional[str] = None,
         sort_by: Optional[str] = None,
-        sort_dir: Optional[str] = None
+        sort_dir: Optional[str] = None,
+        tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """List templates with pagination."""
-        return self.templates.list(page, size, search, description, sort_by, sort_dir)
+        return self.templates.list(page, size, search, description, sort_by, sort_dir, tags)
     
     def get_template(self, template_id: str) -> Dict[str, Any]:
         """Get template details."""
@@ -152,6 +153,24 @@ class MubanAPIClient:
     def get_icc_profiles(self) -> Dict[str, Any]:
         """Get available ICC profiles."""
         return self.templates.get_icc_profiles()
+    
+    # ========== Backward-Compatible Tags Methods ==========
+    
+    def get_template_tags(self, template_id: str) -> Dict[str, Any]:
+        """Get all tags for a template."""
+        return self.templates.get_tags(template_id)
+    
+    def replace_template_tags(self, template_id: str, tags: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Replace all tags on a template."""
+        return self.templates.replace_tags(template_id, tags)
+    
+    def add_template_tags(self, template_id: str, tags: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Upsert tags on a template."""
+        return self.templates.add_tags(template_id, tags)
+    
+    def delete_template_tags(self, template_id: str) -> Dict[str, Any]:
+        """Remove all tags from a template."""
+        return self.templates.delete_tags(template_id)
     
     # ========== Backward-Compatible Admin Methods ==========
     

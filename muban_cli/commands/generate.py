@@ -46,6 +46,10 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option('--pdf-password', help='PDF user password')
     @click.option('--pdf-owner-password', help='PDF owner password')
     @click.option('--pdf-duplex-padding', is_flag=True, help='Pad PDF to even page count for duplex printing')
+    @click.option('--pdf-image-compression', type=float, help='JPEG re-compression quality (0.0-1.0)')
+    @click.option('--pdf-flatten-transparency', is_flag=True, help='Strip redundant transparency groups from PDF')
+    @click.option('--pdf-font-substitute', help='Font family to substitute for non-embedded base-14 fonts')
+    @click.option('--pdf-cmyk-profile', help='ICC profile name for RGB to CMYK conversion')
     @click.option('--txt-char-width', type=float, help='TXT character cell width in pixels (default: 8.0)')
     @click.option('--txt-char-height', type=float, help='TXT character cell height in pixels (default: 13.948)')
     @click.option('--txt-page-width-chars', type=int, help='TXT page width in characters (overrides char width)')
@@ -74,6 +78,10 @@ def register_generate_commands(cli: click.Group) -> None:
         pdf_password: Optional[str],
         pdf_owner_password: Optional[str],
         pdf_duplex_padding: bool,
+        pdf_image_compression: Optional[float],
+        pdf_flatten_transparency: bool,
+        pdf_font_substitute: Optional[str],
+        pdf_cmyk_profile: Optional[str],
         txt_char_width: Optional[float],
         txt_char_height: Optional[float],
         txt_page_width_chars: Optional[int],
@@ -90,6 +98,7 @@ def register_generate_commands(cli: click.Group) -> None:
           muban generate abc123 --data-file data.json -o report.pdf
           muban generate abc123 --pdf-pdfa PDF/A-1b --locale pl_PL
           muban generate abc123 -F txt --txt-page-width-chars 80 --txt-trim-line-right
+          muban generate abc123 --pdf-image-compression 0.75 --pdf-flatten-transparency
           muban generate abc123 -b '{"parameters":[{"name":"title","value":"Test"}]}'
           muban generate abc123 -B request.json -F pdf
         """
@@ -174,7 +183,8 @@ def register_generate_commands(cli: click.Group) -> None:
         
         # Build PDF options
         pdf_options = None
-        if any([pdf_pdfa, pdf_password, pdf_owner_password, pdf_duplex_padding]):
+        if any([pdf_pdfa, pdf_password, pdf_owner_password, pdf_duplex_padding,
+                pdf_image_compression, pdf_flatten_transparency, pdf_font_substitute, pdf_cmyk_profile]):
             pdf_options = {}
             if pdf_pdfa:
                 pdf_options['pdfaConformance'] = pdf_pdfa
@@ -184,6 +194,14 @@ def register_generate_commands(cli: click.Group) -> None:
                 pdf_options['ownerPassword'] = pdf_owner_password
             if pdf_duplex_padding:
                 pdf_options['duplexPadding'] = True
+            if pdf_image_compression is not None:
+                pdf_options['imageCompressionQuality'] = pdf_image_compression
+            if pdf_flatten_transparency:
+                pdf_options['flattenTransparency'] = True
+            if pdf_font_substitute:
+                pdf_options['fontEmbeddingSubstitute'] = pdf_font_substitute
+            if pdf_cmyk_profile:
+                pdf_options['cmykConversionProfile'] = pdf_cmyk_profile
         
         # Build TXT options
         txt_options = None

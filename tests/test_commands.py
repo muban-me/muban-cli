@@ -238,6 +238,15 @@ class TestGenerateCommand:
         assert result.exit_code == 0
         assert '--pdf-duplex-padding' in result.output
 
+    def test_generate_help_has_pdf_optimization_flags(self, runner):
+        """Test generate help includes new PDF optimization flags."""
+        result = runner.invoke(cli, ['generate', '--help'])
+        assert result.exit_code == 0
+        assert '--pdf-image-compression' in result.output
+        assert '--pdf-flatten-transparency' in result.output
+        assert '--pdf-font-substitute' in result.output
+        assert '--pdf-cmyk-profile' in result.output
+
 
 class TestGetCommand:
     """Test get template command."""
@@ -498,3 +507,50 @@ class TestPackageCommand:
         ])
         assert result.exit_code != 0
         assert 'does not exist' in result.output.lower() or 'not found' in result.output.lower() or 'no such file' in result.output.lower()
+
+
+class TestTagsCommands:
+    """Test tags management commands."""
+
+    def test_tags_help(self, runner):
+        """Test tags command help."""
+        result = runner.invoke(cli, ['tags', '--help'])
+        assert result.exit_code == 0
+        assert 'get' in result.output.lower()
+        assert 'set' in result.output.lower()
+        assert 'add' in result.output.lower()
+        assert 'delete' in result.output.lower()
+
+    def test_tags_get_help(self, runner):
+        """Test tags get help."""
+        result = runner.invoke(cli, ['tags', 'get', '--help'])
+        assert result.exit_code == 0
+        assert 'template_id' in result.output.lower()
+
+    def test_tags_get_requires_template_id(self, runner):
+        """Test tags get requires template ID."""
+        result = runner.invoke(cli, ['tags', 'get'])
+        assert result.exit_code != 0
+
+    def test_tags_set_help(self, runner):
+        """Test tags set help."""
+        result = runner.invoke(cli, ['tags', 'set', '--help'])
+        assert result.exit_code == 0
+        assert 'key=value' in result.output.lower()
+
+    def test_tags_add_help(self, runner):
+        """Test tags add help."""
+        result = runner.invoke(cli, ['tags', 'add', '--help'])
+        assert result.exit_code == 0
+
+    def test_tags_delete_help(self, runner):
+        """Test tags delete help."""
+        result = runner.invoke(cli, ['tags', 'delete', '--help'])
+        assert result.exit_code == 0
+        assert 'yes' in result.output.lower() or 'confirm' in result.output.lower()
+
+    def test_list_has_tag_filter(self, runner):
+        """Test list command has --tag filter option."""
+        result = runner.invoke(cli, ['list', '--help'])
+        assert result.exit_code == 0
+        assert '--tag' in result.output

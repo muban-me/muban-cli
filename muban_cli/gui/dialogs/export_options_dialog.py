@@ -187,6 +187,47 @@ class ExportOptionsDialog(QDialog):
         printing_layout.addWidget(self.pdf_duplex_padding)
         pdf_layout.addWidget(printing_group)
 
+        # Output Optimization Group
+        optim_group = QGroupBox("Output Optimization")
+        optim_layout = QFormLayout(optim_group)
+
+        self.pdf_image_compression = QDoubleSpinBox()
+        self.pdf_image_compression.setRange(0.0, 1.0)
+        self.pdf_image_compression.setDecimals(2)
+        self.pdf_image_compression.setSingleStep(0.1)
+        self.pdf_image_compression.setSpecialValueText("Off")
+        self.pdf_image_compression.setValue(0.0)
+        self.pdf_image_compression.setToolTip(
+            "JPEG re-compression quality (0.0-1.0). Higher values = better quality, larger files.\n"
+            "Set to 0 (Off) to disable image re-compression."
+        )
+        optim_layout.addRow("Image Compression Quality:", self.pdf_image_compression)
+
+        self.pdf_flatten_transparency = QCheckBox("Flatten Transparency")
+        self.pdf_flatten_transparency.setChecked(False)
+        self.pdf_flatten_transparency.setToolTip(
+            "Strip redundant transparency groups from the PDF.\n"
+            "Can reduce file size when transparency is not needed."
+        )
+        optim_layout.addRow("", self.pdf_flatten_transparency)
+
+        self.pdf_font_substitute = QLineEdit()
+        self.pdf_font_substitute.setPlaceholderText("e.g., DejaVu Sans")
+        self.pdf_font_substitute.setToolTip(
+            "Font family to substitute for non-embedded base-14 fonts.\n"
+            "Leave empty to keep default base-14 references."
+        )
+        optim_layout.addRow("Font Embedding Substitute:", self.pdf_font_substitute)
+
+        self.pdf_cmyk_profile = QLineEdit()
+        self.pdf_cmyk_profile.setPlaceholderText("e.g., ISOcoated_v2_300_bas.icc")
+        self.pdf_cmyk_profile.setToolTip(
+            "ICC profile name for RGB to CMYK color conversion.\n"
+            "Used for professional pre-press output."
+        )
+        optim_layout.addRow("CMYK Conversion Profile:", self.pdf_cmyk_profile)
+        pdf_layout.addWidget(optim_group)
+
         pdf_layout.addStretch()
         self.tabs.addTab(pdf_widget, "PDF")
 
@@ -373,6 +414,14 @@ class ExportOptionsDialog(QDialog):
             self.pdf_high_quality_print.setChecked(pdf["canPrintHighQuality"])
         if "duplexPadding" in pdf:
             self.pdf_duplex_padding.setChecked(pdf["duplexPadding"])
+        if pdf.get("imageCompressionQuality"):
+            self.pdf_image_compression.setValue(pdf["imageCompressionQuality"])
+        if "flattenTransparency" in pdf:
+            self.pdf_flatten_transparency.setChecked(pdf["flattenTransparency"])
+        if pdf.get("fontEmbeddingSubstitute"):
+            self.pdf_font_substitute.setText(pdf["fontEmbeddingSubstitute"])
+        if pdf.get("cmykConversionProfile"):
+            self.pdf_cmyk_profile.setText(pdf["cmykConversionProfile"])
 
         # HTML options
         html = self._html_options
@@ -471,6 +520,21 @@ class ExportOptionsDialog(QDialog):
         if self.pdf_duplex_padding.isChecked():
             options["duplexPadding"] = True
 
+        img_q = self.pdf_image_compression.value()
+        if img_q > 0.0:
+            options["imageCompressionQuality"] = img_q
+
+        if self.pdf_flatten_transparency.isChecked():
+            options["flattenTransparency"] = True
+
+        font_sub = self.pdf_font_substitute.text().strip()
+        if font_sub:
+            options["fontEmbeddingSubstitute"] = font_sub
+
+        cmyk = self.pdf_cmyk_profile.text().strip()
+        if cmyk:
+            options["cmykConversionProfile"] = cmyk
+
         return options if options else None
 
     def get_html_options(self) -> Optional[Dict[str, Any]]:
@@ -495,6 +559,15 @@ class ExportOptionsDialog(QDialog):
             parts.append("Encrypted")
         if self.pdf_duplex_padding.isChecked():
             parts.append("Duplex padding")
+        img_q = self.pdf_image_compression.value()
+        if img_q > 0.0:
+            parts.append(f"Img quality: {img_q:.2f}")
+        if self.pdf_flatten_transparency.isChecked():
+            parts.append("Flatten transparency")
+        if self.pdf_font_substitute.text().strip():
+            parts.append(f"Font sub: {self.pdf_font_substitute.text().strip()}")
+        if self.pdf_cmyk_profile.text().strip():
+            parts.append(f"CMYK: {self.pdf_cmyk_profile.text().strip()}")
         return ", ".join(parts) if parts else "Default"
 
     def get_html_summary(self) -> str:

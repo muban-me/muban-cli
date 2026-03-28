@@ -13,7 +13,7 @@ Commands:
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import click
 
@@ -55,6 +55,7 @@ def register_template_commands(cli: click.Group) -> None:
     @click.option('--size', '-n', type=int, default=20, help='Items per page')
     @click.option('--search', '-s', help='Search term (searches name, description, metadata)')
     @click.option('--description', help='Filter by description')
+    @click.option('--tag', '-t', 'tags', multiple=True, help='Filter by tag in key:value format (repeatable, AND logic)')
     @click.option('--sort-by', type=click.Choice(['name', 'author', 'created', 'fileSize', 'templateType']), 
                   default='created', help='Sort field (default: created)')
     @click.option('--sort-dir', type=click.Choice(['asc', 'desc']), 
@@ -71,6 +72,7 @@ def register_template_commands(cli: click.Group) -> None:
         size: int,
         search: Optional[str],
         description: Optional[str],
+        tags: Tuple[str, ...],
         sort_by: str,
         sort_dir: str
     ):
@@ -84,6 +86,7 @@ def register_template_commands(cli: click.Group) -> None:
           muban list --description "monthly report"
           muban list --page 2 --size 50
           muban list --sort-by name --sort-dir asc
+          muban list -t phase:prod -t department:finance
         """
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)
@@ -93,7 +96,8 @@ def register_template_commands(cli: click.Group) -> None:
                 result = client.list_templates(
                     page=page, size=size, search=search,
                     description=description,
-                    sort_by=sort_by, sort_dir=sort_dir
+                    sort_by=sort_by, sort_dir=sort_dir,
+                    tags=list(tags) if tags else None
                 )
                 
                 data = result.get('data', {})
@@ -145,6 +149,13 @@ def register_template_commands(cli: click.Group) -> None:
                 result = client.get_template(template_id)
                 template = result.get('data', {})
                 
+                # Get tags
+                try:
+                    tags_result = client.get_template_tags(template_id)
+                    template_tags = tags_result.get('data', [])
+                except Exception:
+                    template_tags = []
+                
                 # Get parameters if requested
                 parameters = None
                 if params:
@@ -162,8 +173,10 @@ def register_template_commands(cli: click.Group) -> None:
                     format_template_combined_csv(template, parameters, field_list)
                 elif fmt == OutputFormat.JSON:
                     # For JSON, build a combined object if params or fields requested
-                    if params or fields:
+                    if params or fields or template_tags:
                         combined = dict(template)
+                        if template_tags:
+                            combined['tags'] = template_tags
                         if parameters is not None:
                             combined['parameters'] = parameters
                         if field_list is not None:
@@ -174,6 +187,11 @@ def register_template_commands(cli: click.Group) -> None:
                 else:
                     # Standard output for TABLE
                     format_template_detail(template, fmt)
+                    
+                    if template_tags:
+                        click.echo("\n--- Tags ---")
+                        from ..utils import print_table as _pt
+                        _pt(["Key", "Value"], [[t.get('key', ''), t.get('value', '')] for t in template_tags])
                     
                     if params and parameters is not None:
                         click.echo("\n--- Parameters ---")

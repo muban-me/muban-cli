@@ -111,6 +111,27 @@ class TemplateWorker(QThread):
             self.error.emit(str(e))
 
 
+class TagsWorker(QThread):
+    """Worker thread for fetching template tags."""
+
+    finished = pyqtSignal(str, list)  # template_id, tags list
+    error = pyqtSignal(str, str)  # template_id, error message
+
+    def __init__(self, client: MubanAPIClient, template_id: str):
+        super().__init__()
+        self.client = client
+        self.template_id = template_id
+
+    def run(self):
+        try:
+            result = self.client.get_template_tags(self.template_id)
+            tags = result.get("data", [])
+            self.finished.emit(self.template_id, tags)
+        except Exception as e:
+            logger.debug("Failed to load tags for %s: %s", self.template_id, e)
+            self.error.emit(self.template_id, str(e))
+
+
 class UploadWorker(QThread):
     """Worker thread for template upload."""
 
@@ -171,6 +192,8 @@ class TemplatesTab(QWidget):
         self._sort_dir = "desc"
         self._page_size = 20  # Will be recalculated on resize
         self._resize_timer: Optional[QTimer] = None
+        self._tags_worker: Optional[TagsWorker] = None
+        self._selected_template_id: Optional[str] = None
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
@@ -279,7 +302,15 @@ class TemplatesTab(QWidget):
         self.table.setColumnWidth(2, 150)
         self.table.setColumnWidth(3, 80)
         self.table.setColumnWidth(4, 70)
+        self.table.currentCellChanged.connect(self._on_row_selected)
         layout.addWidget(self.table)
+
+        # Tags display (below table, above progress)
+        self.tags_label = QLabel("")
+        self.tags_label.setWordWrap(True)
+        self.tags_label.setVisible(False)
+        self.tags_label.setStyleSheet("padding: 2px 4px;")
+        layout.addWidget(self.tags_label)
 
         # Progress
         self.progress = QProgressBar()
@@ -339,6 +370,10 @@ class TemplatesTab(QWidget):
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.clicked.connect(self._delete_template)
         actions_layout.addWidget(self.delete_btn)
+
+        self.tags_btn = QPushButton("Manage Tags...")
+        self.tags_btn.clicked.connect(self._manage_tags)
+        actions_layout.addWidget(self.tags_btn)
 
         actions_layout.addStretch()
 
@@ -479,6 +514,11 @@ class TemplatesTab(QWidget):
         # Update pagination controls
         self._update_pagination_ui()
         self.status_label.setText(f"✓ Loaded {len(templates)} of {self._total_items} templates")
+
+        # Clear tags display on reload
+        self._selected_template_id = None
+        self.tags_label.setVisible(False)
+        self.tags_label.setText("")
 
     def _update_pagination_ui(self):
         """Update pagination buttons and spinbox."""
@@ -653,6 +693,40 @@ class TemplatesTab(QWidget):
         except Exception as e:
             show_error_dialog(self, "Delete Error", str(e))
 
+    def _manage_tags(self):
+        """Open tags management dialog for selected template."""
+        template = self._get_selected_template()
+        if not template:
+            QMessageBox.warning(self, "No Selection", "Please select a template to manage tags.")
+            return
+
+        client = self._get_client()
+        if not client:
+            return
+
+        template_id = template["id"]
+        template_name = template.get("name", template_id)
+
+        # Load existing tags
+        try:
+            tags_result = client.get_template_tags(template_id)
+            current_tags = tags_result.get("data", [])
+        except Exception as e:
+            show_error_dialog(self, "Load Tags Error", str(e))
+            return
+
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+        dialog = TagsDialog(self, template_name=template_name, tags=current_tags)
+        if dialog.exec():
+            new_tags = dialog.get_tags()
+            try:
+                client.replace_template_tags(template_id, new_tags)
+                self.status_label.setText(f"\u2713 Tags updated for {template_name}")
+                # Refresh the tags display for this template
+                self._fetch_tags_for_selected(template_id)
+            except Exception as e:
+                show_error_dialog(self, "Save Tags Error", str(e))
+
     def _generate_from_template(self):
         """Switch to generate tab with selected template."""
         template = self._get_selected_template()
@@ -701,6 +775,53 @@ class TemplatesTab(QWidget):
             self.status_label.setText("✓ ID copied to clipboard")
             QTimer.singleShot(2000, lambda: self.status_label.setText(old_status))
 
+    def _on_row_selected(self, current_row: int, current_col: int, prev_row: int, prev_col: int):
+        """Fetch and display tags when a template row is selected."""
+        if current_row < 0 or current_row >= len(self._templates):
+            self.tags_label.setVisible(False)
+            self._selected_template_id = None
+            return
+
+        template = self._templates[current_row]
+        template_id = template.get("id", "")
+        if template_id == self._selected_template_id:
+            return  # Already showing tags for this template
+
+        self._selected_template_id = template_id
+        self.tags_label.setText("Tags: loading...")
+        self.tags_label.setVisible(True)
+        self._fetch_tags_for_selected(template_id)
+
+    def _fetch_tags_for_selected(self, template_id: str):
+        """Start a background fetch of tags for a template."""
+        client = self._get_client()
+        if not client:
+            self.tags_label.setText("Tags: (unable to connect)")
+            return
+
+        self._tags_worker = TagsWorker(client, template_id)
+        self._tags_worker.finished.connect(self._on_tags_loaded)
+        self._tags_worker.error.connect(self._on_tags_error)
+        self._tags_worker.start()
+
+    def _on_tags_loaded(self, template_id: str, tags: list):
+        """Display fetched tags."""
+        if template_id != self._selected_template_id:
+            return  # Selection changed while loading
+        if not tags:
+            self.tags_label.setText("Tags: (none)")
+        else:
+            parts = [f"{t.get('key')}={t.get('value')}" for t in tags]
+            self.tags_label.setText(f"Tags: {', '.join(parts)}")
+        self.tags_label.setVisible(True)
+
+    def _on_tags_error(self, template_id: str, error: str):
+        """Handle tags fetch error."""
+        if template_id != self._selected_template_id:
+            return
+        self.tags_label.setText("Tags: (failed to load)")
+        self.tags_label.setVisible(True)
+
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""
         self.refresh_btn.setEnabled(enabled)
@@ -711,6 +832,7 @@ class TemplatesTab(QWidget):
         self.download_btn.setEnabled(enabled)
         self.delete_btn.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
+        self.tags_btn.setEnabled(enabled)
         self.page_spinbox.setEnabled(enabled)
         if enabled:
             self._update_pagination_ui()

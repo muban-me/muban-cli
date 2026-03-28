@@ -35,6 +35,7 @@ from .commands.audit import register_audit_commands
 from .commands.users import register_user_commands
 from .commands.async_ops import register_async_commands
 from .commands.package import register_package_commands
+from .commands.tags import register_tags_commands
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ register_audit_commands(cli)
 register_user_commands(cli)
 register_async_commands(cli)
 register_package_commands(cli)
+register_tags_commands(cli)
 
 
 # ============================================================================

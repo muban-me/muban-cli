@@ -786,6 +786,139 @@ class TestExportOptionsDialog:
         assert "80 cols" in summary
         assert "Trim" in summary
 
+    def test_export_options_dialog_pdf_optimization(self, qtbot):
+        """Test new PDF output optimization controls."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        dialog = ExportOptionsDialog()
+        qtbot.addWidget(dialog)
+
+        # Default: no optimization options
+        assert dialog.pdf_image_compression.value() == 0.0
+        assert not dialog.pdf_flatten_transparency.isChecked()
+        assert dialog.pdf_font_substitute.text() == ""
+        assert dialog.pdf_cmyk_profile.text() == ""
+
+        # Set values
+        dialog.pdf_image_compression.setValue(0.75)
+        dialog.pdf_flatten_transparency.setChecked(True)
+        dialog.pdf_font_substitute.setText("DejaVu Sans")
+        dialog.pdf_cmyk_profile.setText("ISOcoated_v2_300_bas.icc")
+
+        opts = dialog.get_pdf_options()
+        assert opts is not None
+        assert opts["imageCompressionQuality"] == 0.75
+        assert opts["flattenTransparency"] is True
+        assert opts["fontEmbeddingSubstitute"] == "DejaVu Sans"
+        assert opts["cmykConversionProfile"] == "ISOcoated_v2_300_bas.icc"
+
+    def test_export_options_dialog_pdf_optimization_load(self, qtbot):
+        """Test PDF optimization controls load from stored options."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        pdf_options = {
+            "imageCompressionQuality": 0.5,
+            "flattenTransparency": True,
+            "fontEmbeddingSubstitute": "Arial",
+            "cmykConversionProfile": "sRGB.icc",
+        }
+        dialog = ExportOptionsDialog(pdf_options=pdf_options)
+        qtbot.addWidget(dialog)
+
+        assert dialog.pdf_image_compression.value() == 0.5
+        assert dialog.pdf_flatten_transparency.isChecked()
+        assert dialog.pdf_font_substitute.text() == "Arial"
+        assert dialog.pdf_cmyk_profile.text() == "sRGB.icc"
+
+    def test_export_options_dialog_pdf_optimization_summary(self, qtbot):
+        """Test PDF summary includes optimization settings."""
+        from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
+
+        dialog = ExportOptionsDialog()
+        qtbot.addWidget(dialog)
+
+        dialog.pdf_image_compression.setValue(0.8)
+        dialog.pdf_flatten_transparency.setChecked(True)
+        summary = dialog.get_pdf_summary()
+        assert "Img quality" in summary
+        assert "Flatten transparency" in summary
+
+
+class TestTagsDialog:
+    """Tests for the Tags Management dialog."""
+
+    def test_tags_dialog_creation(self, qtbot):
+        """Test tags dialog can be created."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+
+        dialog = TagsDialog()
+        qtbot.addWidget(dialog)
+        assert dialog is not None
+
+    def test_tags_dialog_with_existing_tags(self, qtbot):
+        """Test tags dialog loads existing tags."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+
+        tags = [
+            {"key": "phase", "value": "prod"},
+            {"key": "department", "value": "finance"},
+        ]
+        dialog = TagsDialog(template_name="My Template", tags=tags)
+        qtbot.addWidget(dialog)
+
+        assert dialog.table.rowCount() == 2
+        assert dialog.table.item(0, 0).text() == "phase"
+        assert dialog.table.item(0, 1).text() == "prod"
+
+    def test_tags_dialog_add_row(self, qtbot):
+        """Test adding a row to the tags table."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+
+        dialog = TagsDialog()
+        qtbot.addWidget(dialog)
+
+        assert dialog.table.rowCount() == 0
+        dialog._add_row()
+        assert dialog.table.rowCount() == 1
+
+    def test_tags_dialog_remove_row(self, qtbot):
+        """Test removing a row from the tags table."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+
+        tags = [{"key": "phase", "value": "prod"}]
+        dialog = TagsDialog(tags=tags)
+        qtbot.addWidget(dialog)
+
+        assert dialog.table.rowCount() == 1
+        dialog.table.setCurrentCell(0, 0)
+        dialog._remove_selected()
+        assert dialog.table.rowCount() == 0
+
+    def test_tags_dialog_get_tags(self, qtbot):
+        """Test getting tags from dialog."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+
+        tags = [{"key": "env", "value": "staging"}]
+        dialog = TagsDialog(tags=tags)
+        qtbot.addWidget(dialog)
+
+        result = dialog.get_tags()
+        assert len(result) == 1
+        assert result[0]["key"] == "env"
+        assert result[0]["value"] == "staging"
+
+    def test_tags_dialog_max_tags(self, qtbot):
+        """Test cannot exceed max tags limit."""
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog, MAX_TAGS
+
+        tags = [{"key": f"key{i}", "value": f"val{i}"} for i in range(MAX_TAGS)]
+        dialog = TagsDialog(tags=tags)
+        qtbot.addWidget(dialog)
+
+        assert dialog.table.rowCount() == MAX_TAGS
+        dialog._add_row()  # Should not add (shows warning)
+        assert dialog.table.rowCount() == MAX_TAGS
+
 
 class TestDataEditorDialog:
     """Tests for the Data Editor dialog."""

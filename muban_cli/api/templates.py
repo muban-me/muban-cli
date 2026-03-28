@@ -43,7 +43,8 @@ class TemplatesAPI:
         search: Optional[str] = None,
         description: Optional[str] = None,
         sort_by: Optional[str] = None,
-        sort_dir: Optional[str] = None
+        sort_dir: Optional[str] = None,
+        tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         List templates with pagination.
@@ -55,6 +56,7 @@ class TemplatesAPI:
             description: Filter by description specifically
             sort_by: Sort field (name, author, created, fileSize)
             sort_dir: Sort direction (asc, desc)
+            tags: Filter by tags in key:value format (AND logic)
         
         Returns:
             Paginated list of templates
@@ -68,6 +70,8 @@ class TemplatesAPI:
             params["sortBy"] = sort_by
         if sort_dir:
             params["sortDir"] = sort_dir
+        if tags:
+            params["tags"] = ",".join(tags)
         
         return self._http.request("GET", "templates", params=params)
     
@@ -106,6 +110,33 @@ class TemplatesAPI:
             List of template fields
         """
         return self._http.request("GET", f"templates/{template_id}/fields")
+    
+    # ========== Tags ==========
+    
+    def get_tags(self, template_id: str) -> Dict[str, Any]:
+        """Get all tags for a template."""
+        return self._http.request("GET", f"templates/{template_id}/tags")
+    
+    def replace_tags(self, template_id: str, tags: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Replace all tags on a template (idempotent, manager role)."""
+        return self._http.request(
+            "PUT", f"templates/{template_id}/tags",
+            json_data={"tags": tags}
+        )
+    
+    def add_tags(self, template_id: str, tags: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Upsert tags on a template (concurrent-safe, manager role)."""
+        return self._http.request(
+            "POST", f"templates/{template_id}/tags",
+            json_data={"tags": tags}
+        )
+    
+    def delete_tags(self, template_id: str) -> Dict[str, Any]:
+        """Remove all tags from a template (manager role)."""
+        return self._http.request(
+            "DELETE", f"templates/{template_id}/tags",
+            expected_status=[200, 204]
+        )
     
     def upload(
         self,
