@@ -659,7 +659,7 @@ The GUI provides a tabbed interface with the following sections:
 - Search and filter templates
 - Sort by name, author, size, type, or date
 - View template details, parameters, and fields
-- **Manage tags** — add, edit, and remove template tags via dialog
+- Manage tags — add, edit, and remove template tags via dialog
 - Upload new templates (ZIP format)
 - Download templates to local filesystem
 - Delete templates with confirmation

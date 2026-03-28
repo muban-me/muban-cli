@@ -59,7 +59,8 @@ class TemplateWorker(QThread):
         page: int = 1,
         size: int = 20,
         sort_by: str = "created",
-        sort_dir: str = "desc"
+        sort_dir: str = "desc",
+        tags: Optional[List[str]] = None
     ):
         super().__init__()
         self.client = client
@@ -68,6 +69,7 @@ class TemplateWorker(QThread):
         self.size = size
         self.sort_by = sort_by
         self.sort_dir = sort_dir
+        self.tags = tags
 
     def run(self):
         try:
@@ -76,7 +78,8 @@ class TemplateWorker(QThread):
                 page=self.page,
                 size=self.size,
                 sort_by=self.sort_by,
-                sort_dir=self.sort_dir
+                sort_dir=self.sort_dir,
+                tags=self.tags
             )
             
             # Handle different response structures
@@ -362,6 +365,10 @@ class TemplatesTab(QWidget):
         self.search_input.setPlaceholderText("Search templates...")
         self.search_input.returnPressed.connect(self._search_templates)
         search_layout.addWidget(self.search_input)
+        self.tag_filter_input = QLineEdit()
+        self.tag_filter_input.setPlaceholderText("Filter by tags (e.g. env:prod, dept:finance)")
+        self.tag_filter_input.returnPressed.connect(self._search_templates)
+        search_layout.addWidget(self.tag_filter_input)
         self.search_btn = QPushButton("Search")
         self.search_btn.clicked.connect(self._search_templates)
         search_layout.addWidget(self.search_btn)
@@ -531,8 +538,10 @@ class TemplatesTab(QWidget):
             self.progress.setRange(0, 0)
 
             search = self.search_input.text().strip() or None
-            
-            self.worker = TemplateWorker(client, search, self._current_page, self._page_size, self._sort_by, self._sort_dir)
+            tags_text = self.tag_filter_input.text().strip()
+            tags = [t.strip() for t in tags_text.split(",") if t.strip()] or None
+
+            self.worker = TemplateWorker(client, search, self._current_page, self._page_size, self._sort_by, self._sort_dir, tags)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
@@ -895,6 +904,7 @@ class TemplatesTab(QWidget):
         """Enable/disable UI elements."""
         self.refresh_btn.setEnabled(enabled)
         self.search_input.setEnabled(enabled)
+        self.tag_filter_input.setEnabled(enabled)
         self.search_btn.setEnabled(enabled)
         self.table.setEnabled(enabled)
         self.upload_btn.setEnabled(enabled)
