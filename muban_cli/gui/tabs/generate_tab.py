@@ -25,8 +25,7 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QTextEdit,
-    QSplitter,
-    QSizePolicy,
+    QTabWidget,
     QStyle,
 )
 
@@ -204,14 +203,6 @@ class GenerateTab(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # Main splitter
-        splitter = QSplitter(Qt.Orientation.Vertical)
-
-        # Top section - inputs
-        top_widget = QWidget()
-        top_layout = QVBoxLayout(top_widget)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-
         # Template selection
         template_group = QGroupBox("Template")
         template_layout = QFormLayout(template_group)
@@ -225,11 +216,15 @@ class GenerateTab(QWidget):
         template_id_layout.addWidget(self.load_params_btn)
         template_layout.addRow("Template ID:", template_id_layout)
 
-        top_layout.addWidget(template_group)
+        layout.addWidget(template_group)
 
-        # Parameters
-        params_group = QGroupBox("Parameters")
-        params_layout = QVBoxLayout(params_group)
+        # Tabbed section for Parameters / Fields
+        self.data_tabs = QTabWidget()
+
+        # --- Parameters tab ---
+        params_widget = QWidget()
+        params_layout = QVBoxLayout(params_widget)
+        params_layout.setContentsMargins(4, 4, 4, 4)
 
         self.params_table = QTableWidget(0, 4)
         self.params_table.setHorizontalHeaderLabels(["Name", "Type", "Default (expression)", "Value"])
@@ -273,14 +268,13 @@ class GenerateTab(QWidget):
         file_layout.addStretch()
         params_layout.addLayout(file_layout)
 
-        top_layout.addWidget(params_group)
+        self.data_tabs.addTab(params_widget, "Parameters")
 
-        # Fields (informational) and Data - hidden by default, shown only when template has fields
-        self.fields_group = QGroupBox("Fields (data collections)")
-        fields_layout = QVBoxLayout(self.fields_group)
-        self.fields_group.setVisible(False)  # Hidden until fields are loaded
+        # --- Fields tab (added dynamically when fields are loaded) ---
+        self.fields_widget = QWidget()
+        fields_layout = QVBoxLayout(self.fields_widget)
+        fields_layout.setContentsMargins(4, 4, 4, 4)
 
-        # Fields table
         self.fields_table = QTableWidget(0, 3)
         self.fields_table.setHorizontalHeaderLabels(["Name", "Type", "Description"])
         fields_header = self.fields_table.horizontalHeader()
@@ -290,38 +284,33 @@ class GenerateTab(QWidget):
         self.fields_table.setColumnWidth(0, 200)
         self.fields_table.setColumnWidth(1, 80)
         self.fields_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        # Allow table to expand with container
         self.fields_table.setMinimumHeight(80)
         fields_layout.addWidget(self.fields_table)
 
-        # Data section - wrapped in a widget for proper layout containment
+        # Data section
         self.data_row_widget = QWidget()
         data_row = QHBoxLayout(self.data_row_widget)
         data_row.setContentsMargins(0, 8, 0, 0)
         data_row.setSpacing(8)
-        
+
         self.data_label = QLabel("Data JSON:")
         data_row.addWidget(self.data_label)
-        
+
         self.data_preview = QLabel("")
         data_row.addWidget(self.data_preview, 1)
-        
+
         self.edit_data_btn = QPushButton("Edit...")
         self.edit_data_btn.setToolTip("Open data editor dialog for viewing and editing JSON data")
         self.edit_data_btn.clicked.connect(self._open_data_editor)
         data_row.addWidget(self.edit_data_btn)
-        
-        # Hidden by default
+
         self.data_row_widget.setVisible(False)
         fields_layout.addWidget(self.data_row_widget)
-        
-        # Store data internally
-        self._data_json = ""
-        
-        # Let the group box size naturally
-        self.fields_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
-        top_layout.addWidget(self.fields_group)
+        self._data_json = ""
+        self._fields_tab_index = -1  # Not added yet
+
+        layout.addWidget(self.data_tabs, 1)
 
         # Output options
         output_group = QGroupBox("Output Options")
@@ -344,7 +333,7 @@ class GenerateTab(QWidget):
         output_file_layout.addWidget(self.output_browse_btn)
         output_layout.addRow("Output:", output_file_layout)
 
-        top_layout.addWidget(output_group)
+        layout.addWidget(output_group)
 
         # Export options button
         export_layout = QHBoxLayout()
@@ -356,7 +345,7 @@ class GenerateTab(QWidget):
         self.export_summary_label.setStyleSheet("color: gray; font-style: italic;")
         export_layout.addWidget(self.export_summary_label)
         export_layout.addStretch()
-        top_layout.addLayout(export_layout)
+        layout.addLayout(export_layout)
 
         # Update export options visibility based on format
         self._update_export_options_visibility()
@@ -368,7 +357,7 @@ class GenerateTab(QWidget):
         self.generate_btn.setMinimumWidth(150)
         self.generate_btn.clicked.connect(self._generate)
         action_layout.addWidget(self.generate_btn)
-        top_layout.addLayout(action_layout)
+        layout.addLayout(action_layout)
         
         # Apply icons
         style = self.style()
@@ -379,21 +368,16 @@ class GenerateTab(QWidget):
         # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
-        top_layout.addWidget(self.progress)
+        layout.addWidget(self.progress)
 
-        splitter.addWidget(top_widget)
-
-        # Status/log area
+        # Status/log area (fixed at bottom)
         log_group = QGroupBox("Status")
         log_layout = QVBoxLayout(log_group)
         self.status_output = QTextEdit()
         self.status_output.setReadOnly(True)
         self.status_output.setMaximumHeight(100)
         log_layout.addWidget(self.status_output)
-        splitter.addWidget(log_group)
-
-        splitter.setSizes([500, 100])
-        layout.addWidget(splitter)
+        layout.addWidget(log_group)
 
     def showEvent(self, event):
         """Called when the tab is shown."""
@@ -461,7 +445,7 @@ class GenerateTab(QWidget):
         self._data_json = ""
         self._update_data_preview()
         self._set_data_row_visible(False)
-        self.fields_group.updateGeometry()
+        self.fields_widget.updateGeometry()
 
         self._set_ui_enabled(False)
         self.progress.setVisible(True)
@@ -541,8 +525,12 @@ class GenerateTab(QWidget):
             desc_item.setFlags(desc_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.fields_table.setItem(i, 2, desc_item)
 
-        # Show fields section only if there are fields defined
-        self.fields_group.setVisible(len(fields) > 0)
+        # Show Fields tab only if there are fields defined
+        if len(fields) > 0 and self._fields_tab_index == -1:
+            self._fields_tab_index = self.data_tabs.addTab(self.fields_widget, "Fields")
+        elif len(fields) == 0 and self._fields_tab_index != -1:
+            self.data_tabs.removeTab(self._fields_tab_index)
+            self._fields_tab_index = -1
         
         if fields:
             self._log(f"✓ Loaded {len(fields)} fields")
@@ -660,13 +648,13 @@ class GenerateTab(QWidget):
                 self._data_json = json.dumps(data, indent=2, ensure_ascii=False)
                 self._update_data_preview()
                 self._set_data_row_visible(True)
-                self.fields_group.updateGeometry()
+                self.fields_widget.updateGeometry()
                 self._log(f"✓ Loaded request with parameters and data from {Path(file_path).name}{options_info}")
             else:
                 self._data_json = ""
                 self._update_data_preview()
                 self._set_data_row_visible(False)
-                self.fields_group.updateGeometry()
+                self.fields_widget.updateGeometry()
                 self._log(f"✓ Loaded parameters from {Path(file_path).name}{options_info}")
             
             # Update export summary to reflect loaded options
@@ -915,7 +903,7 @@ class GenerateTab(QWidget):
         # Build request body for debug logging (mirrors what API client does)
         params = self._get_parameters()
         params_list = [{"name": k, "value": v} for k, v in params.items()]
-        request_body = {"parameters": params_list}
+        request_body: Dict[str, Any] = {"parameters": params_list}
         if data:
             request_body["data"] = data
         if self._document_locale:

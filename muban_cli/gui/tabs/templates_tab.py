@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
-from PyQt6.QtGui import QShowEvent, QResizeEvent
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt, QRect, QSize, QPoint
+from PyQt6.QtGui import QShowEvent, QResizeEvent, QPalette
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -27,6 +27,8 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QStyle,
     QApplication,
+    QLayout,
+    QLayoutItem,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -57,7 +59,8 @@ class TemplateWorker(QThread):
         page: int = 1,
         size: int = 20,
         sort_by: str = "created",
-        sort_dir: str = "desc"
+        sort_dir: str = "desc",
+        tags: Optional[List[str]] = None
     ):
         super().__init__()
         self.client = client
@@ -66,6 +69,7 @@ class TemplateWorker(QThread):
         self.size = size
         self.sort_by = sort_by
         self.sort_dir = sort_dir
+        self.tags = tags
 
     def run(self):
         try:
@@ -74,7 +78,8 @@ class TemplateWorker(QThread):
                 page=self.page,
                 size=self.size,
                 sort_by=self.sort_by,
-                sort_dir=self.sort_dir
+                sort_dir=self.sort_dir,
+                tags=self.tags
             )
             
             # Handle different response structures
@@ -109,6 +114,73 @@ class TemplateWorker(QThread):
         except Exception as e:
             logger.exception("Failed to load templates")
             self.error.emit(str(e))
+
+
+class FlowLayout(QLayout):
+    """A layout that arranges widgets left-to-right, wrapping to the next line."""
+
+    def __init__(self, parent=None, margin: int = 2, spacing: int = 3):
+        super().__init__(parent)
+        self._items: List[QLayoutItem] = []
+        self._margin = margin
+        self._spacing = spacing
+        self.setContentsMargins(margin, margin, margin, margin)
+
+    def addItem(self, item: QLayoutItem):
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int) -> Optional[QLayoutItem]:
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int) -> Optional[QLayoutItem]:
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect: QRect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self) -> QSize:
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:
+        size = QSize(0, 0)
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self._margin * 2
+        return QSize(size.width() + m, size.height() + m)
+
+    def _do_layout(self, rect: QRect, test_only: bool) -> int:
+        x = rect.x() + self._margin
+        y = rect.y() + self._margin
+        line_height = 0
+        right = rect.right() - self._margin
+
+        for item in self._items:
+            w = item.sizeHint().width()
+            h = item.sizeHint().height()
+            if x + w > right and line_height > 0:
+                x = rect.x() + self._margin
+                y += line_height + self._spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+            x += w + self._spacing
+            line_height = max(line_height, h)
+
+        return y + line_height - rect.y() + self._margin
 
 
 class UploadWorker(QThread):
@@ -151,7 +223,19 @@ class TemplatesTab(QWidget):
         5: "created",
     }
     # Column headers without sort indicator
-    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Type", "Created"]
+    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Type", "Created", "Tags"]
+
+    # Palette of tag pill colors (hue-varied, muted pastels)
+    TAG_COLORS = [
+        ("#1E88E5", "#E3F2FD"),  # blue
+        ("#43A047", "#E8F5E9"),  # green
+        ("#E53935", "#FFEBEE"),  # red
+        ("#FB8C00", "#FFF3E0"),  # orange
+        ("#8E24AA", "#F3E5F5"),  # purple
+        ("#00ACC1", "#E0F7FA"),  # cyan
+        ("#6D4C41", "#EFEBE9"),  # brown
+        ("#546E7A", "#ECEFF1"),  # blue grey
+    ]
 
     # Row height for page size calculation (pixels)
     ROW_HEIGHT = 26
@@ -224,6 +308,30 @@ class TemplatesTab(QWidget):
             new_page = max(1, (first_item - 1) // new_size + 1)
             self._current_page = new_page
             self._load_templates()
+        else:
+            # Even without page change, reflow tag pills to new column width
+            self._resize_rows_for_tags()
+
+    def _resize_rows_for_tags(self):
+        """Manually set each row's height based on tag pill wrapping."""
+        col_width = self.table.columnWidth(6)
+        if col_width <= 0:
+            col_width = 200
+        v_header = self.table.verticalHeader()
+        default_h = v_header.defaultSectionSize() if v_header else 30
+        for i in range(self.table.rowCount()):
+            widget = self.table.cellWidget(i, 6)
+            lyt = widget.layout() if widget else None
+            if lyt and lyt.heightForWidth(col_width) > 0:
+                needed = lyt.heightForWidth(col_width)
+                self.table.setRowHeight(i, max(needed, default_h))
+            else:
+                self.table.setRowHeight(i, default_h)
+
+    def _on_column_resized(self, index: int, old_size: int, new_size: int):
+        """Recalculate row heights when the Tags column (or any column) is resized."""
+        if index == 6:
+            self._resize_rows_for_tags()
 
     def _calculate_page_size(self) -> int:
         """Calculate optimal page size based on table viewport height."""
@@ -257,13 +365,17 @@ class TemplatesTab(QWidget):
         self.search_input.setPlaceholderText("Search templates...")
         self.search_input.returnPressed.connect(self._search_templates)
         search_layout.addWidget(self.search_input)
+        self.tag_filter_input = QLineEdit()
+        self.tag_filter_input.setPlaceholderText("Filter by tags (e.g. env:prod, dept:finance)")
+        self.tag_filter_input.returnPressed.connect(self._search_templates)
+        search_layout.addWidget(self.tag_filter_input)
         self.search_btn = QPushButton("Search")
         self.search_btn.clicked.connect(self._search_templates)
         search_layout.addWidget(self.search_btn)
         layout.addLayout(search_layout)
 
         # Templates table
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 7)
         self._update_header_labels()
         header = self.table.horizontalHeader()
         if header:
@@ -271,14 +383,17 @@ class TemplatesTab(QWidget):
             header.setStretchLastSection(True)
             header.setSectionsClickable(True)
             header.sectionClicked.connect(self._on_header_clicked)
+            header.sectionResized.connect(self._on_column_resized)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.cellDoubleClicked.connect(lambda: self._generate_from_template())
         self.table.setColumnWidth(0, 280)
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(2, 150)
         self.table.setColumnWidth(3, 80)
         self.table.setColumnWidth(4, 70)
+        self.table.setColumnWidth(5, 140)
         layout.addWidget(self.table)
 
         # Progress
@@ -335,6 +450,10 @@ class TemplatesTab(QWidget):
         self.download_btn = QPushButton("Download")
         self.download_btn.clicked.connect(self._download_template)
         actions_layout.addWidget(self.download_btn)
+
+        self.tags_btn = QPushButton("Manage Tags...")
+        self.tags_btn.clicked.connect(self._manage_tags)
+        actions_layout.addWidget(self.tags_btn)
 
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.clicked.connect(self._delete_template)
@@ -419,8 +538,10 @@ class TemplatesTab(QWidget):
             self.progress.setRange(0, 0)
 
             search = self.search_input.text().strip() or None
-            
-            self.worker = TemplateWorker(client, search, self._current_page, self._page_size, self._sort_by, self._sort_dir)
+            tags_text = self.tag_filter_input.text().strip()
+            tags = [t.strip() for t in tags_text.split(",") if t.strip()] or None
+
+            self.worker = TemplateWorker(client, search, self._current_page, self._page_size, self._sort_by, self._sort_dir, tags)
             self.worker.finished.connect(self._on_templates_loaded)
             self.worker.error.connect(self._on_load_error)
             self.worker.start()
@@ -441,6 +562,7 @@ class TemplatesTab(QWidget):
         self._total_items = result.get('total_items', len(templates))
 
         self._templates = templates
+        self.table.setRowCount(0)
         self.table.setRowCount(len(templates))
 
         for i, t in enumerate(templates):
@@ -470,6 +592,17 @@ class TemplatesTab(QWidget):
             if created:
                 created = created.replace("T", " ")[:19]
             self.table.setItem(i, 5, QTableWidgetItem(created))
+
+            # Tags column — rendered as colored pills
+            tags = t.get("tags") or []
+            if tags:
+                tags_widget = self._create_tags_cell_widget(tags)
+                self.table.setCellWidget(i, 6, tags_widget)
+            else:
+                self.table.setItem(i, 6, QTableWidgetItem(""))
+
+        # Resize rows so tag pills wrap properly
+        self._resize_rows_for_tags()
 
         # Update vertical header to show absolute row numbers
         start_index = (self._current_page - 1) * self._page_size
@@ -653,6 +786,33 @@ class TemplatesTab(QWidget):
         except Exception as e:
             show_error_dialog(self, "Delete Error", str(e))
 
+    def _manage_tags(self):
+        """Open tags management dialog for selected template."""
+        template = self._get_selected_template()
+        if not template:
+            QMessageBox.warning(self, "No Selection", "Please select a template to manage tags.")
+            return
+
+        client = self._get_client()
+        if not client:
+            return
+
+        template_id = template["id"]
+        template_name = template.get("name", template_id)
+        current_tags = template.get("tags") or []
+
+        from muban_cli.gui.dialogs.tags_dialog import TagsDialog
+        dialog = TagsDialog(self, template_name=template_name, tags=current_tags)
+        if dialog.exec():
+            new_tags = dialog.get_tags()
+            try:
+                client.replace_template_tags(template_id, new_tags)
+                self.status_label.setText(f"\u2713 Tags updated for {template_name}")
+                # Reload list to reflect updated tags
+                self._load_templates()
+            except Exception as e:
+                show_error_dialog(self, "Save Tags Error", str(e))
+
     def _generate_from_template(self):
         """Switch to generate tab with selected template."""
         template = self._get_selected_template()
@@ -701,16 +861,57 @@ class TemplatesTab(QWidget):
             self.status_label.setText("✓ ID copied to clipboard")
             QTimer.singleShot(2000, lambda: self.status_label.setText(old_status))
 
+    def _create_tags_cell_widget(self, tags: list) -> QWidget:
+        """Create a widget with colored tag pills for a table cell."""
+        widget = QWidget()
+        layout = FlowLayout(widget, margin=2, spacing=3)
+
+        is_dark = self._is_dark_theme()
+
+        for idx, tag in enumerate(tags):
+            key = tag.get("key", "")
+            value = tag.get("value", "")
+            fg, bg = self.TAG_COLORS[idx % len(self.TAG_COLORS)]
+
+            pill = QLabel(f" {key}:{value} ")
+            if is_dark:
+                # In dark theme: use the accent color as background with white text
+                pill.setStyleSheet(
+                    f"background-color: {fg}; color: #FFFFFF; "
+                    f"border-radius: 7px; padding: 1px 5px; font-size: 11px;"
+                )
+            else:
+                # In light theme: pastel background with accent text
+                pill.setStyleSheet(
+                    f"background-color: {bg}; color: {fg}; "
+                    f"border-radius: 7px; padding: 1px 5px; font-size: 11px;"
+                )
+            layout.addWidget(pill)
+
+        return widget
+
+    @staticmethod
+    def _is_dark_theme() -> bool:
+        """Detect if the current palette is dark."""
+        app = QApplication.instance()
+        if app is not None and isinstance(app, QApplication):
+            palette = app.palette()
+            bg = palette.color(QPalette.ColorRole.Window)
+            return bg.lightness() < 128
+        return False
+
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""
         self.refresh_btn.setEnabled(enabled)
         self.search_input.setEnabled(enabled)
+        self.tag_filter_input.setEnabled(enabled)
         self.search_btn.setEnabled(enabled)
         self.table.setEnabled(enabled)
         self.upload_btn.setEnabled(enabled)
         self.download_btn.setEnabled(enabled)
         self.delete_btn.setEnabled(enabled)
         self.generate_btn.setEnabled(enabled)
+        self.tags_btn.setEnabled(enabled)
         self.page_spinbox.setEnabled(enabled)
         if enabled:
             self._update_pagination_ui()

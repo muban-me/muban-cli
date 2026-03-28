@@ -405,3 +405,98 @@ class TestDownloadTemplate:
                 template_id=template_id,
                 output_path=output_path
             )
+
+    @responses.activate
+    def test_list_templates_with_tags_filter(self, client):
+        """Test listing templates with tags filter."""
+        mock_response = {
+            "data": {
+                "items": [{"id": "1", "name": "Tagged Template"}],
+                "totalItems": 1,
+                "totalPages": 1
+            }
+        }
+
+        responses.add(
+            responses.GET,
+            "https://test.muban.me/api/v1/templates",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.list_templates(tags=["phase:prod", "dept:finance"])
+
+        assert result["data"]["totalItems"] == 1
+        # Verify tags query param was sent
+        assert "tags=phase%3Aprod%2Cdept%3Afinance" in responses.calls[0].request.url or \
+               "tags=phase:prod,dept:finance" in responses.calls[0].request.url
+
+    @responses.activate
+    def test_get_template_tags(self, client):
+        """Test getting template tags."""
+        template_id = "test-uuid-123"
+        mock_response = {
+            "data": [
+                {"key": "phase", "value": "prod"},
+                {"key": "department", "value": "finance"}
+            ]
+        }
+
+        responses.add(
+            responses.GET,
+            f"https://test.muban.me/api/v1/templates/{template_id}/tags",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.get_template_tags(template_id)
+        assert len(result["data"]) == 2
+        assert result["data"][0]["key"] == "phase"
+
+    @responses.activate
+    def test_replace_template_tags(self, client):
+        """Test replacing template tags."""
+        template_id = "test-uuid-123"
+        tags = [{"key": "phase", "value": "prod"}]
+        mock_response = {"data": tags}
+
+        responses.add(
+            responses.PUT,
+            f"https://test.muban.me/api/v1/templates/{template_id}/tags",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.replace_template_tags(template_id, tags)
+        assert result["data"][0]["key"] == "phase"
+
+    @responses.activate
+    def test_add_template_tags(self, client):
+        """Test adding template tags."""
+        template_id = "test-uuid-123"
+        tags = [{"key": "env", "value": "staging"}]
+        mock_response = {"data": [{"key": "phase", "value": "prod"}, {"key": "env", "value": "staging"}]}
+
+        responses.add(
+            responses.POST,
+            f"https://test.muban.me/api/v1/templates/{template_id}/tags",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.add_template_tags(template_id, tags)
+        assert len(result["data"]) == 2
+
+    @responses.activate
+    def test_delete_template_tags(self, client):
+        """Test deleting all template tags."""
+        template_id = "test-uuid-123"
+
+        responses.add(
+            responses.DELETE,
+            f"https://test.muban.me/api/v1/templates/{template_id}/tags",
+            status=204
+        )
+
+        result = client.delete_template_tags(template_id)
+        assert result is not None

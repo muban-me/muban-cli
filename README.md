@@ -10,10 +10,11 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 - **Graphical User Interface** - Optional PyQt6-based GUI for visual template management and document generation
 - **Secure Authentication** - JWT token-based auth with password or OAuth2 client credentials flow
 - **Template Management** - List, upload, download, and delete templates (JRXML and DOCX)
+- **Tag Management** - Organize templates with key-value tags, filter by tags
 - **Template Packaging** - Package JRXML or DOCX templates with auto-detected image assets and optional fonts into deployable ZIP packages
 - **Document Generation** - Generate PDF, XLSX, DOCX, RTF, HTML, and TXT documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
-- **Search & Filter** - Search templates and filter audit logs
+- **Search & Filter** - Search templates and filter by tags or audit logs
 - **Audit & Monitoring** - Access audit logs and security dashboards (admin)
 - **Multiple Output Formats** - Table, JSON, and CSV for easy data export
 - **Automation Ready** - Perfect for CI/CD pipelines with service account support
@@ -225,11 +226,12 @@ muban list --search "invoice" --format json
 muban list --format csv > templates.csv    # Export to CSV
 muban list --page 2 --size 50
 muban list --sort-by templateType           # Sort by template type (JASPER/DOCX)
+muban list -t phase:prod -t department:finance  # Filter by tags (AND logic)
 
 # Search templates
 muban search "quarterly report"
 
-# Get template details
+# Get template details (includes tags)
 muban get TEMPLATE_ID
 muban get TEMPLATE_ID --params  # Show parameters
 muban get TEMPLATE_ID --fields  # Show fields
@@ -251,6 +253,12 @@ muban pull TEMPLATE_ID -o ./templates/report.zip
 # Delete a template
 muban delete TEMPLATE_ID
 muban delete TEMPLATE_ID --yes  # Skip confirmation
+
+# Manage template tags
+muban tags get TEMPLATE_ID                     # View tags
+muban tags set TEMPLATE_ID phase=prod env=live # Replace all tags
+muban tags add TEMPLATE_ID department=finance  # Add/upsert tags
+muban tags delete TEMPLATE_ID --yes            # Remove all tags
 ```
 
 ### Template Packaging
@@ -370,6 +378,12 @@ muban generate TEMPLATE_ID --data-file data.json
 muban generate TEMPLATE_ID --pdf-pdfa PDF/A-1b --locale pl_PL
 muban generate TEMPLATE_ID --pdf-password secret123
 muban generate TEMPLATE_ID --pdf-duplex-padding  # Pad to even pages for double-sided printing
+
+# PDF output optimization
+muban generate TEMPLATE_ID --pdf-image-compression 0.75     # JPEG re-compression quality (0.0-1.0)
+muban generate TEMPLATE_ID --pdf-flatten-transparency        # Strip redundant transparency groups
+muban generate TEMPLATE_ID --pdf-font-substitute "DejaVu Sans"  # Substitute base-14 fonts
+muban generate TEMPLATE_ID --pdf-cmyk-profile ISOcoated_v2_300_bas.icc  # RGB→CMYK conversion
 
 # General export options
 muban generate TEMPLATE_ID --locale de_DE         # Document locale for formatting
@@ -645,6 +659,7 @@ The GUI provides a tabbed interface with the following sections:
 - Search and filter templates
 - Sort by name, author, size, type, or date
 - View template details, parameters, and fields
+- Manage tags — add, edit, and remove template tags via dialog
 - Upload new templates (ZIP format)
 - Download templates to local filesystem
 - Delete templates with confirmation
@@ -657,7 +672,7 @@ The GUI provides a tabbed interface with the following sections:
 - Provide JSON data sources
 - Configure export options:
   - **General options**: Document locale for number/date/currency formatting, ignore pagination for continuous output
-  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding
+  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding, image compression quality, flatten transparency, font embedding substitute, CMYK conversion profile
   - **HTML options**: Resource embedding, single-file output, custom CSS
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem
