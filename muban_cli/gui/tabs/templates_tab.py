@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
-from PyQt6.QtGui import QShowEvent, QResizeEvent
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt, QRect, QSize, QPoint
+from PyQt6.QtGui import QShowEvent, QResizeEvent, QPalette
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -27,6 +27,8 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QStyle,
     QApplication,
+    QLayout,
+    QLayoutItem,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -111,25 +113,71 @@ class TemplateWorker(QThread):
             self.error.emit(str(e))
 
 
-class TagsWorker(QThread):
-    """Worker thread for fetching template tags."""
+class FlowLayout(QLayout):
+    """A layout that arranges widgets left-to-right, wrapping to the next line."""
 
-    finished = pyqtSignal(str, list)  # template_id, tags list
-    error = pyqtSignal(str, str)  # template_id, error message
+    def __init__(self, parent=None, margin: int = 2, spacing: int = 3):
+        super().__init__(parent)
+        self._items: List[QLayoutItem] = []
+        self._margin = margin
+        self._spacing = spacing
+        self.setContentsMargins(margin, margin, margin, margin)
 
-    def __init__(self, client: MubanAPIClient, template_id: str):
-        super().__init__()
-        self.client = client
-        self.template_id = template_id
+    def addItem(self, item: QLayoutItem):
+        self._items.append(item)
 
-    def run(self):
-        try:
-            result = self.client.get_template_tags(self.template_id)
-            tags = result.get("data", [])
-            self.finished.emit(self.template_id, tags)
-        except Exception as e:
-            logger.debug("Failed to load tags for %s: %s", self.template_id, e)
-            self.error.emit(self.template_id, str(e))
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int) -> Optional[QLayoutItem]:
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int) -> Optional[QLayoutItem]:
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect: QRect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self) -> QSize:
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:
+        size = QSize(0, 0)
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self._margin * 2
+        return QSize(size.width() + m, size.height() + m)
+
+    def _do_layout(self, rect: QRect, test_only: bool) -> int:
+        x = rect.x() + self._margin
+        y = rect.y() + self._margin
+        line_height = 0
+        right = rect.right() - self._margin
+
+        for item in self._items:
+            w = item.sizeHint().width()
+            h = item.sizeHint().height()
+            if x + w > right and line_height > 0:
+                x = rect.x() + self._margin
+                y += line_height + self._spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+            x += w + self._spacing
+            line_height = max(line_height, h)
+
+        return y + line_height - rect.y() + self._margin
 
 
 class UploadWorker(QThread):
@@ -172,7 +220,19 @@ class TemplatesTab(QWidget):
         5: "created",
     }
     # Column headers without sort indicator
-    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Type", "Created"]
+    BASE_HEADERS = ["ID", "Name", "Author", "Size", "Type", "Created", "Tags"]
+
+    # Palette of tag pill colors (hue-varied, muted pastels)
+    TAG_COLORS = [
+        ("#1E88E5", "#E3F2FD"),  # blue
+        ("#43A047", "#E8F5E9"),  # green
+        ("#E53935", "#FFEBEE"),  # red
+        ("#FB8C00", "#FFF3E0"),  # orange
+        ("#8E24AA", "#F3E5F5"),  # purple
+        ("#00ACC1", "#E0F7FA"),  # cyan
+        ("#6D4C41", "#EFEBE9"),  # brown
+        ("#546E7A", "#ECEFF1"),  # blue grey
+    ]
 
     # Row height for page size calculation (pixels)
     ROW_HEIGHT = 26
@@ -192,8 +252,6 @@ class TemplatesTab(QWidget):
         self._sort_dir = "desc"
         self._page_size = 20  # Will be recalculated on resize
         self._resize_timer: Optional[QTimer] = None
-        self._tags_worker: Optional[TagsWorker] = None
-        self._selected_template_id: Optional[str] = None
         self._setup_ui()
 
     def showEvent(self, event: QShowEvent):
@@ -247,6 +305,30 @@ class TemplatesTab(QWidget):
             new_page = max(1, (first_item - 1) // new_size + 1)
             self._current_page = new_page
             self._load_templates()
+        else:
+            # Even without page change, reflow tag pills to new column width
+            self._resize_rows_for_tags()
+
+    def _resize_rows_for_tags(self):
+        """Manually set each row's height based on tag pill wrapping."""
+        col_width = self.table.columnWidth(6)
+        if col_width <= 0:
+            col_width = 200
+        v_header = self.table.verticalHeader()
+        default_h = v_header.defaultSectionSize() if v_header else 30
+        for i in range(self.table.rowCount()):
+            widget = self.table.cellWidget(i, 6)
+            lyt = widget.layout() if widget else None
+            if lyt and lyt.heightForWidth(col_width) > 0:
+                needed = lyt.heightForWidth(col_width)
+                self.table.setRowHeight(i, max(needed, default_h))
+            else:
+                self.table.setRowHeight(i, default_h)
+
+    def _on_column_resized(self, index: int, old_size: int, new_size: int):
+        """Recalculate row heights when the Tags column (or any column) is resized."""
+        if index == 6:
+            self._resize_rows_for_tags()
 
     def _calculate_page_size(self) -> int:
         """Calculate optimal page size based on table viewport height."""
@@ -286,7 +368,7 @@ class TemplatesTab(QWidget):
         layout.addLayout(search_layout)
 
         # Templates table
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 7)
         self._update_header_labels()
         header = self.table.horizontalHeader()
         if header:
@@ -294,23 +376,18 @@ class TemplatesTab(QWidget):
             header.setStretchLastSection(True)
             header.setSectionsClickable(True)
             header.sectionClicked.connect(self._on_header_clicked)
+            header.sectionResized.connect(self._on_column_resized)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.cellDoubleClicked.connect(lambda: self._generate_from_template())
         self.table.setColumnWidth(0, 280)
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(2, 150)
         self.table.setColumnWidth(3, 80)
         self.table.setColumnWidth(4, 70)
-        self.table.currentCellChanged.connect(self._on_row_selected)
+        self.table.setColumnWidth(5, 140)
         layout.addWidget(self.table)
-
-        # Tags display (below table, above progress)
-        self.tags_label = QLabel("")
-        self.tags_label.setWordWrap(True)
-        self.tags_label.setVisible(False)
-        self.tags_label.setStyleSheet("padding: 2px 4px;")
-        layout.addWidget(self.tags_label)
 
         # Progress
         self.progress = QProgressBar()
@@ -367,13 +444,13 @@ class TemplatesTab(QWidget):
         self.download_btn.clicked.connect(self._download_template)
         actions_layout.addWidget(self.download_btn)
 
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.clicked.connect(self._delete_template)
-        actions_layout.addWidget(self.delete_btn)
-
         self.tags_btn = QPushButton("Manage Tags...")
         self.tags_btn.clicked.connect(self._manage_tags)
         actions_layout.addWidget(self.tags_btn)
+
+        self.delete_btn = QPushButton("Delete")
+        self.delete_btn.clicked.connect(self._delete_template)
+        actions_layout.addWidget(self.delete_btn)
 
         actions_layout.addStretch()
 
@@ -476,6 +553,7 @@ class TemplatesTab(QWidget):
         self._total_items = result.get('total_items', len(templates))
 
         self._templates = templates
+        self.table.setRowCount(0)
         self.table.setRowCount(len(templates))
 
         for i, t in enumerate(templates):
@@ -506,6 +584,17 @@ class TemplatesTab(QWidget):
                 created = created.replace("T", " ")[:19]
             self.table.setItem(i, 5, QTableWidgetItem(created))
 
+            # Tags column — rendered as colored pills
+            tags = t.get("tags") or []
+            if tags:
+                tags_widget = self._create_tags_cell_widget(tags)
+                self.table.setCellWidget(i, 6, tags_widget)
+            else:
+                self.table.setItem(i, 6, QTableWidgetItem(""))
+
+        # Resize rows so tag pills wrap properly
+        self._resize_rows_for_tags()
+
         # Update vertical header to show absolute row numbers
         start_index = (self._current_page - 1) * self._page_size
         vertical_labels = [str(start_index + i + 1) for i in range(len(templates))]
@@ -514,11 +603,6 @@ class TemplatesTab(QWidget):
         # Update pagination controls
         self._update_pagination_ui()
         self.status_label.setText(f"✓ Loaded {len(templates)} of {self._total_items} templates")
-
-        # Clear tags display on reload
-        self._selected_template_id = None
-        self.tags_label.setVisible(False)
-        self.tags_label.setText("")
 
     def _update_pagination_ui(self):
         """Update pagination buttons and spinbox."""
@@ -706,14 +790,7 @@ class TemplatesTab(QWidget):
 
         template_id = template["id"]
         template_name = template.get("name", template_id)
-
-        # Load existing tags
-        try:
-            tags_result = client.get_template_tags(template_id)
-            current_tags = tags_result.get("data", [])
-        except Exception as e:
-            show_error_dialog(self, "Load Tags Error", str(e))
-            return
+        current_tags = template.get("tags") or []
 
         from muban_cli.gui.dialogs.tags_dialog import TagsDialog
         dialog = TagsDialog(self, template_name=template_name, tags=current_tags)
@@ -722,8 +799,8 @@ class TemplatesTab(QWidget):
             try:
                 client.replace_template_tags(template_id, new_tags)
                 self.status_label.setText(f"\u2713 Tags updated for {template_name}")
-                # Refresh the tags display for this template
-                self._fetch_tags_for_selected(template_id)
+                # Reload list to reflect updated tags
+                self._load_templates()
             except Exception as e:
                 show_error_dialog(self, "Save Tags Error", str(e))
 
@@ -775,52 +852,44 @@ class TemplatesTab(QWidget):
             self.status_label.setText("✓ ID copied to clipboard")
             QTimer.singleShot(2000, lambda: self.status_label.setText(old_status))
 
-    def _on_row_selected(self, current_row: int, current_col: int, prev_row: int, prev_col: int):
-        """Fetch and display tags when a template row is selected."""
-        if current_row < 0 or current_row >= len(self._templates):
-            self.tags_label.setVisible(False)
-            self._selected_template_id = None
-            return
+    def _create_tags_cell_widget(self, tags: list) -> QWidget:
+        """Create a widget with colored tag pills for a table cell."""
+        widget = QWidget()
+        layout = FlowLayout(widget, margin=2, spacing=3)
 
-        template = self._templates[current_row]
-        template_id = template.get("id", "")
-        if template_id == self._selected_template_id:
-            return  # Already showing tags for this template
+        is_dark = self._is_dark_theme()
 
-        self._selected_template_id = template_id
-        self.tags_label.setText("Tags: loading...")
-        self.tags_label.setVisible(True)
-        self._fetch_tags_for_selected(template_id)
+        for idx, tag in enumerate(tags):
+            key = tag.get("key", "")
+            value = tag.get("value", "")
+            fg, bg = self.TAG_COLORS[idx % len(self.TAG_COLORS)]
 
-    def _fetch_tags_for_selected(self, template_id: str):
-        """Start a background fetch of tags for a template."""
-        client = self._get_client()
-        if not client:
-            self.tags_label.setText("Tags: (unable to connect)")
-            return
+            pill = QLabel(f" {key}:{value} ")
+            if is_dark:
+                # In dark theme: use the accent color as background with white text
+                pill.setStyleSheet(
+                    f"background-color: {fg}; color: #FFFFFF; "
+                    f"border-radius: 7px; padding: 1px 5px; font-size: 11px;"
+                )
+            else:
+                # In light theme: pastel background with accent text
+                pill.setStyleSheet(
+                    f"background-color: {bg}; color: {fg}; "
+                    f"border-radius: 7px; padding: 1px 5px; font-size: 11px;"
+                )
+            layout.addWidget(pill)
 
-        self._tags_worker = TagsWorker(client, template_id)
-        self._tags_worker.finished.connect(self._on_tags_loaded)
-        self._tags_worker.error.connect(self._on_tags_error)
-        self._tags_worker.start()
+        return widget
 
-    def _on_tags_loaded(self, template_id: str, tags: list):
-        """Display fetched tags."""
-        if template_id != self._selected_template_id:
-            return  # Selection changed while loading
-        if not tags:
-            self.tags_label.setText("Tags: (none)")
-        else:
-            parts = [f"{t.get('key')}={t.get('value')}" for t in tags]
-            self.tags_label.setText(f"Tags: {', '.join(parts)}")
-        self.tags_label.setVisible(True)
-
-    def _on_tags_error(self, template_id: str, error: str):
-        """Handle tags fetch error."""
-        if template_id != self._selected_template_id:
-            return
-        self.tags_label.setText("Tags: (failed to load)")
-        self.tags_label.setVisible(True)
+    @staticmethod
+    def _is_dark_theme() -> bool:
+        """Detect if the current palette is dark."""
+        app = QApplication.instance()
+        if app is not None and isinstance(app, QApplication):
+            palette = app.palette()
+            bg = palette.color(QPalette.ColorRole.Window)
+            return bg.lightness() < 128
+        return False
 
     def _set_ui_enabled(self, enabled: bool):
         """Enable/disable UI elements."""
