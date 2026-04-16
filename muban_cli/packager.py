@@ -718,6 +718,16 @@ class JRXMLPackager:
                 if jrxml_abs_path.exists():
                     logger.debug(f"Analyzing subreport source: {jrxml_source_path}")
                     
+                    # Include the raw .jrxml source alongside the .jasper
+                    subreport_assets.append(AssetReference(
+                        path=jrxml_source_path,
+                        source_file=asset.source_file,
+                        line_number=asset.line_number,
+                        asset_type="subreport",
+                        reports_dir_value=asset.reports_dir_value,
+                        subreport_source=asset.path,
+                    ))
+                    
                     # Recursively extract assets from subreport
                     nested_assets = self._extract_asset_references_recursive(
                         jrxml_abs_path, base_dir, result, processed_files

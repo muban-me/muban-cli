@@ -361,6 +361,7 @@ class TestRecursiveSubreportAnalysis:
         
         # Should include both subreport and nested asset
         assert "subreports/child.jasper" in paths
+        assert "subreports/child.jrxml" in paths
         assert "assets/img/nested-icon.png" in paths
     
     def test_subreport_source_tracking(self, temp_dir, packager):
@@ -414,6 +415,75 @@ class TestRecursiveSubreportAnalysis:
         nested_asset = next((a for a in result.assets_found if a.path == "assets/from-sub.png"), None)
         assert nested_asset is not None
         assert nested_asset.subreport_source == "subreports/sub.jrxml"
+
+    def test_jrxml_source_included_alongside_jasper(self, temp_dir, packager):
+        """Test that raw .jrxml source files are included alongside .jasper subreports."""
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/report.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+
+        subreport_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="report">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+</jasperReport>
+'''
+        (subreports_dir / "report.jrxml").write_text(subreport_content, encoding='utf-8')
+        (subreports_dir / "report.jasper").write_bytes(b"dummy")
+
+        result = packager.package(main_jrxml, dry_run=True)
+        paths = [a.path for a in result.assets_found]
+
+        assert "subreports/report.jasper" in paths
+        assert "subreports/report.jrxml" in paths
+
+    def test_jrxml_source_not_included_when_missing(self, temp_dir, packager):
+        """Test that missing .jrxml source files are silently skipped."""
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/report.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+
+        # Only .jasper, no .jrxml source
+        (subreports_dir / "report.jasper").write_bytes(b"dummy")
+
+        result = packager.package(main_jrxml, dry_run=True)
+        paths = [a.path for a in result.assets_found]
+
+        assert "subreports/report.jasper" in paths
+        assert "subreports/report.jrxml" not in paths
 
 
 class TestPOSIXPathNormalization:
