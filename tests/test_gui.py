@@ -790,20 +790,21 @@ class TestExportOptionsDialog:
         """Test new PDF output optimization controls."""
         from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
 
-        dialog = ExportOptionsDialog()
+        icc_profiles = ["ISOcoated_v2_300_bas.icc", "sRGB.icc"]
+        dialog = ExportOptionsDialog(icc_profiles=icc_profiles)
         qtbot.addWidget(dialog)
 
         # Default: no optimization options
         assert dialog.pdf_image_compression.value() == 0.0
         assert not dialog.pdf_flatten_transparency.isChecked()
         assert dialog.pdf_font_substitute.text() == ""
-        assert dialog.pdf_cmyk_profile.text() == ""
+        assert dialog.pdf_cmyk_profile.currentText() == ""
 
         # Set values
         dialog.pdf_image_compression.setValue(0.75)
         dialog.pdf_flatten_transparency.setChecked(True)
         dialog.pdf_font_substitute.setText("DejaVu Sans")
-        dialog.pdf_cmyk_profile.setText("ISOcoated_v2_300_bas.icc")
+        dialog.pdf_cmyk_profile.setCurrentText("ISOcoated_v2_300_bas.icc")
 
         opts = dialog.get_pdf_options()
         assert opts is not None
@@ -822,13 +823,13 @@ class TestExportOptionsDialog:
             "fontEmbeddingSubstitute": "Arial",
             "cmykConversionProfile": "sRGB.icc",
         }
-        dialog = ExportOptionsDialog(pdf_options=pdf_options)
+        dialog = ExportOptionsDialog(pdf_options=pdf_options, icc_profiles=["sRGB.icc"])
         qtbot.addWidget(dialog)
 
         assert dialog.pdf_image_compression.value() == 0.5
         assert dialog.pdf_flatten_transparency.isChecked()
         assert dialog.pdf_font_substitute.text() == "Arial"
-        assert dialog.pdf_cmyk_profile.text() == "sRGB.icc"
+        assert dialog.pdf_cmyk_profile.currentText() == "sRGB.icc"
 
     def test_export_options_dialog_pdf_optimization_summary(self, qtbot):
         """Test PDF summary includes optimization settings."""
@@ -867,8 +868,10 @@ class TestTagsDialog:
         qtbot.addWidget(dialog)
 
         assert dialog.table.rowCount() == 2
-        assert dialog.table.item(0, 0).text() == "phase"
-        assert dialog.table.item(0, 1).text() == "prod"
+        item_key = dialog.table.item(0, 0)
+        item_val = dialog.table.item(0, 1)
+        assert item_key is not None and item_key.text() == "phase"
+        assert item_val is not None and item_val.text() == "prod"
 
     def test_tags_dialog_add_row(self, qtbot):
         """Test adding a row to the tags table."""
