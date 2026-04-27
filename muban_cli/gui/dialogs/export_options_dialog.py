@@ -92,7 +92,7 @@ class ExportOptionsDialog(QDialog):
         pdf_layout = QVBoxLayout(pdf_widget)
         
         # PDF/A & ICC Group
-        archive_group = QGroupBox("Archival & Color")
+        archive_group = QGroupBox("PDF/A && Color Profiles")
         archive_layout = QFormLayout(archive_group)
         
         self.pdfa_combo = QComboBox()
@@ -219,8 +219,10 @@ class ExportOptionsDialog(QDialog):
         )
         optim_layout.addRow("Font Embedding Substitute:", self.pdf_font_substitute)
 
-        self.pdf_cmyk_profile = QLineEdit()
-        self.pdf_cmyk_profile.setPlaceholderText("e.g., ISOcoated_v2_300_bas.icc")
+        self.pdf_cmyk_profile = QComboBox()
+        self.pdf_cmyk_profile.addItem("")
+        for profile in self._icc_profiles:
+            self.pdf_cmyk_profile.addItem(profile)
         self.pdf_cmyk_profile.setToolTip(
             "ICC profile name for RGB to CMYK color conversion.\n"
             "Used for professional pre-press output."
@@ -421,7 +423,9 @@ class ExportOptionsDialog(QDialog):
         if pdf.get("fontEmbeddingSubstitute"):
             self.pdf_font_substitute.setText(pdf["fontEmbeddingSubstitute"])
         if pdf.get("cmykConversionProfile"):
-            self.pdf_cmyk_profile.setText(pdf["cmykConversionProfile"])
+            idx = self.pdf_cmyk_profile.findText(pdf["cmykConversionProfile"])
+            if idx >= 0:
+                self.pdf_cmyk_profile.setCurrentIndex(idx)
 
         # HTML options
         html = self._html_options
@@ -457,16 +461,16 @@ class ExportOptionsDialog(QDialog):
 
     def update_icc_profiles(self, profiles: List[str]):
         """Update ICC profiles list."""
-        current = self.icc_combo.currentText()
-        self.icc_combo.clear()
-        self.icc_combo.addItem("")
-        for profile in profiles:
-            self.icc_combo.addItem(profile)
-        # Restore selection if still available
-        if current:
-            idx = self.icc_combo.findText(current)
-            if idx >= 0:
-                self.icc_combo.setCurrentIndex(idx)
+        for combo in (self.icc_combo, self.pdf_cmyk_profile):
+            current = combo.currentText()
+            combo.clear()
+            combo.addItem("")
+            for profile in profiles:
+                combo.addItem(profile)
+            if current:
+                idx = combo.findText(current)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
 
     def get_document_locale(self) -> Optional[str]:
         """Get document locale."""
@@ -531,7 +535,7 @@ class ExportOptionsDialog(QDialog):
         if font_sub:
             options["fontEmbeddingSubstitute"] = font_sub
 
-        cmyk = self.pdf_cmyk_profile.text().strip()
+        cmyk = self.pdf_cmyk_profile.currentText().strip()
         if cmyk:
             options["cmykConversionProfile"] = cmyk
 
@@ -566,8 +570,8 @@ class ExportOptionsDialog(QDialog):
             parts.append("Flatten transparency")
         if self.pdf_font_substitute.text().strip():
             parts.append(f"Font sub: {self.pdf_font_substitute.text().strip()}")
-        if self.pdf_cmyk_profile.text().strip():
-            parts.append(f"CMYK: {self.pdf_cmyk_profile.text().strip()}")
+        if self.pdf_cmyk_profile.currentText().strip():
+            parts.append(f"CMYK: {self.pdf_cmyk_profile.currentText().strip()}")
         return ", ".join(parts) if parts else "Default"
 
     def get_html_summary(self) -> str:

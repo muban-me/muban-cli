@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QTabWidget,
     QStyle,
+    QApplication,
 )
 
 from muban_cli.api import MubanAPIClient
@@ -236,7 +237,8 @@ class GenerateTab(QWidget):
         self.params_table.setColumnWidth(0, 200)
         self.params_table.setColumnWidth(1, 80)
         self.params_table.setColumnWidth(2, 200)
-        params_layout.addWidget(self.params_table)
+        self.params_table.setMinimumHeight(60)
+        params_layout.addWidget(self.params_table, 1)
 
         # Manual parameter entry
         manual_layout = QHBoxLayout()
@@ -265,8 +267,34 @@ class GenerateTab(QWidget):
         )
         self.load_request_btn.clicked.connect(self._load_request_from_file)
         file_layout.addWidget(self.load_request_btn)
+
+        self.copy_request_btn = QPushButton("Copy Request JSON")
+        self.copy_request_btn.setToolTip("Copy the full assembled request body JSON to clipboard")
+        self.copy_request_btn.clicked.connect(self._copy_request_json)
+        file_layout.addWidget(self.copy_request_btn)
+
+        self.edit_data_btn = QPushButton("Edit Request...")
+        self.edit_data_btn.setToolTip("Open the JSON editor to view and edit the full request body")
+        self.edit_data_btn.clicked.connect(self._open_data_editor)
+        file_layout.addWidget(self.edit_data_btn)
+
         file_layout.addStretch()
         params_layout.addLayout(file_layout)
+
+        # Data section (shown below Load Request when data is present)
+        self.data_row_widget = QWidget()
+        data_row = QHBoxLayout(self.data_row_widget)
+        data_row.setContentsMargins(0, 4, 0, 0)
+        data_row.setSpacing(8)
+
+        self.data_label = QLabel("Data JSON:")
+        data_row.addWidget(self.data_label)
+
+        self.data_preview = QLabel("")
+        data_row.addWidget(self.data_preview, 1)
+
+        self.data_row_widget.setVisible(False)
+        params_layout.addWidget(self.data_row_widget)
 
         self.data_tabs.addTab(params_widget, "Parameters")
 
@@ -286,26 +314,6 @@ class GenerateTab(QWidget):
         self.fields_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.fields_table.setMinimumHeight(80)
         fields_layout.addWidget(self.fields_table)
-
-        # Data section
-        self.data_row_widget = QWidget()
-        data_row = QHBoxLayout(self.data_row_widget)
-        data_row.setContentsMargins(0, 8, 0, 0)
-        data_row.setSpacing(8)
-
-        self.data_label = QLabel("Data JSON:")
-        data_row.addWidget(self.data_label)
-
-        self.data_preview = QLabel("")
-        data_row.addWidget(self.data_preview, 1)
-
-        self.edit_data_btn = QPushButton("Edit...")
-        self.edit_data_btn.setToolTip("Open data editor dialog for viewing and editing JSON data")
-        self.edit_data_btn.clicked.connect(self._open_data_editor)
-        data_row.addWidget(self.edit_data_btn)
-
-        self.data_row_widget.setVisible(False)
-        fields_layout.addWidget(self.data_row_widget)
 
         self._data_json = ""
         self._fields_tab_index = -1  # Not added yet
@@ -574,6 +582,48 @@ class GenerateTab(QWidget):
         self.param_name_input.clear()
         self.param_value_input.clear()
 
+    def _build_request_body(
+        self,
+        params: Dict[str, Any],
+        data: Optional[Any] = None,
+        pdf_options: Optional[Dict[str, Any]] = None,
+        html_options: Optional[Dict[str, Any]] = None,
+        txt_options: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Assemble the full request body dict from current UI state."""
+        params_list = [{"name": k, "value": v} for k, v in params.items()]
+        body: Dict[str, Any] = {"parameters": params_list}
+        if data:
+            body["data"] = data
+        if self._document_locale:
+            body["documentLocale"] = self._document_locale
+        if self._ignore_pagination:
+            body["ignorePagination"] = self._ignore_pagination
+        if pdf_options:
+            body["pdfExportOptions"] = pdf_options
+        if html_options:
+            body["htmlExportOptions"] = html_options
+        if txt_options:
+            body["txtExportOptions"] = txt_options
+        return body
+
+    def _copy_request_json(self):
+        """Copy the full assembled request body JSON to the clipboard."""
+        fmt = self._get_format()
+        pdf_options = self._get_pdf_options() if fmt == "pdf" else None
+        html_options = self._get_html_options() if fmt == "html" else None
+        txt_options = self._get_txt_options() if fmt == "txt" else None
+        params = self._get_parameters()
+        data = self._get_data()
+        body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+        text = json.dumps(body, indent=2, ensure_ascii=False)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            clipboard = app.clipboard()
+            if clipboard:
+                clipboard.setText(text)
+        self._log("✓ Request JSON copied to clipboard")
+
     def _load_request_from_file(self):
         """Load request (parameters and data) from JSON file."""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -769,19 +819,65 @@ class GenerateTab(QWidget):
         self.data_row_widget.setVisible(visible)
 
     def _open_data_editor(self):
-        """Open the data editor dialog."""
+        """Open the full request JSON in the editor dialog."""
         from muban_cli.gui.dialogs.data_editor_dialog import DataEditorDialog
+
+        fmt = self._get_format()
+        pdf_options = self._get_pdf_options() if fmt == "pdf" else None
+        html_options = self._get_html_options() if fmt == "html" else None
+        txt_options = self._get_txt_options() if fmt == "txt" else None
+        params = self._get_parameters()
+        data = self._get_data()
+        body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+        body_json = json.dumps(body, indent=2, ensure_ascii=False)
 
         dialog = DataEditorDialog(
             parent=self,
-            data=self._data_json,
-            title="Edit JSON Data"
+            data=body_json,
+            title="Edit Request JSON"
         )
 
         if dialog.exec():
-            self._data_json = dialog.get_data()
+            try:
+                edited = json.loads(dialog.get_data())
+            except json.JSONDecodeError as e:
+                QMessageBox.warning(self, "Invalid JSON", f"Could not parse edited request: {e}")
+                return
+
+            # Apply parameters
+            params_list = edited.get("parameters", [])
+            if isinstance(params_list, list):
+                new_params = {p.get("name"): p.get("value") for p in params_list if "name" in p}
+                for row in range(self.params_table.rowCount()):
+                    name_item = self.params_table.item(row, 0)
+                    if name_item and name_item.text() in new_params:
+                        self.params_table.setItem(row, 3, QTableWidgetItem(
+                            format_typed_value(new_params[name_item.text()])
+                        ))
+
+            # Apply data
+            new_data = edited.get("data")
+            if new_data is not None:
+                self._data_json = json.dumps(new_data, indent=2, ensure_ascii=False)
+            else:
+                self._data_json = ""
             self._update_data_preview()
-            self._log("✓ Data updated")
+            self._set_data_row_visible(bool(self._data_json))
+
+            # Apply options
+            if "documentLocale" in edited:
+                self._document_locale = edited["documentLocale"] or None
+            if "ignorePagination" in edited:
+                self._ignore_pagination = bool(edited["ignorePagination"])
+            if "pdfExportOptions" in edited and isinstance(edited["pdfExportOptions"], dict):
+                self._pdf_options = edited["pdfExportOptions"]
+            if "htmlExportOptions" in edited and isinstance(edited["htmlExportOptions"], dict):
+                self._html_options = edited["htmlExportOptions"]
+            if "txtExportOptions" in edited and isinstance(edited["txtExportOptions"], dict):
+                self._txt_options = edited["txtExportOptions"]
+
+            self._update_export_summary()
+            self._log("✓ Request updated from editor")
 
     def _open_export_options_dialog(self):
         """Open the export options dialog."""
@@ -902,21 +998,8 @@ class GenerateTab(QWidget):
         
         # Build request body for debug logging (mirrors what API client does)
         params = self._get_parameters()
-        params_list = [{"name": k, "value": v} for k, v in params.items()]
-        request_body: Dict[str, Any] = {"parameters": params_list}
-        if data:
-            request_body["data"] = data
-        if self._document_locale:
-            request_body["documentLocale"] = self._document_locale
-        if self._ignore_pagination:
-            request_body["ignorePagination"] = self._ignore_pagination
-        if pdf_options:
-            request_body["pdfExportOptions"] = pdf_options
-        if html_options:
-            request_body["htmlExportOptions"] = html_options
-        if txt_options:
-            request_body["txtExportOptions"] = txt_options
-        
+        request_body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+
         # Log request body in debug mode
         logger.debug("Generate document request body:\n%s", json.dumps(request_body, indent=2, ensure_ascii=False))
 
