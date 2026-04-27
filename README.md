@@ -310,7 +310,7 @@ muban package template.docx -u --name "My Letter" --author "John Doe"
 
 - **JRXML & DOCX Support** - Package both JasperReports and DOCX template types
 - **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports (JRXML only)
-- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` files to include their dependencies (JRXML only)
+- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` source files to include their nested dependencies; raw `.jrxml` sources are also bundled in the ZIP alongside the compiled `.jasper` files (JRXML only)
 - **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
@@ -668,11 +668,13 @@ The GUI provides a tabbed interface with the following sections:
 
 - Select template and output format (PDF, XLSX, DOCX, RTF, HTML, TXT)
 - Fill in template parameters with a dynamic form
-- Load parameters from JSON file
+- Load full request JSON from file (parameters, data, and export options in one step)
+- **Copy Request JSON** — copy the assembled request body to clipboard for debugging or reuse
+- **Edit Request...** — open the full request JSON in a built-in editor; changes are applied back to all fields on save
 - Provide JSON data sources
 - Configure export options:
   - **General options**: Document locale for number/date/currency formatting, ignore pagination for continuous output
-  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding, image compression quality, flatten transparency, font embedding substitute, CMYK conversion profile
+  - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding, image compression quality, flatten transparency, font embedding substitute, CMYK conversion profile (dropdown from server ICC profiles)
   - **HTML options**: Resource embedding, single-file output, custom CSS
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem
