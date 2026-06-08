@@ -719,10 +719,13 @@ class GenerateTab(QWidget):
     def _on_format_changed(self, index: int):
         """Update output path extension and export options visibility when format changes."""
         fmt = self._get_format()
+        # HTML format returns a ZIP archive, not a raw .html file
+        _EXT_MAP = {"html": "zip"}
+        ext = _EXT_MAP.get(fmt, fmt)
         current = self.output_input.text()
         if current:
             path = Path(current)
-            self.output_input.setText(str(path.with_suffix(f".{fmt}")))
+            self.output_input.setText(str(path.with_suffix(f".{ext}")))
         self._update_export_options_visibility()
 
     def _update_export_options_visibility(self):
@@ -737,19 +740,22 @@ class GenerateTab(QWidget):
     def _browse_output(self):
         """Browse for output file."""
         fmt = self._get_format()
+        # HTML format returns a ZIP archive, not a raw .html file
+        _EXT_MAP = {"html": "zip"}
         filter_map = {
             "pdf": "PDF Files (*.pdf)",
             "xlsx": "Excel Files (*.xlsx)",
             "docx": "Word Files (*.docx)",
             "rtf": "RTF Files (*.rtf)",
-            "html": "HTML Files (*.html)",
+            "html": "ZIP Archive (*.zip)",
             "txt": "Text Files (*.txt)",
         }
+        ext = _EXT_MAP.get(fmt, fmt)
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Document As",
-            self.output_input.text() or f"document.{fmt}",
+            self.output_input.text() or f"document.{ext}",
             f"{filter_map.get(fmt, 'All Files (*)')};;All Files (*)",
         )
         if file_path:

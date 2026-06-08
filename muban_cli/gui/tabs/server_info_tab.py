@@ -159,6 +159,7 @@ class ServerInfoTab(QWidget):
         self.fonts_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.fonts_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.fonts_table.setAlternatingRowColors(True)
+        self.fonts_table.setSortingEnabled(True)
         fonts_layout.addWidget(self.fonts_table)
 
         self.fonts_count_label = QLabel("No fonts loaded")
@@ -268,6 +269,7 @@ class ServerInfoTab(QWidget):
         """Handle loaded fonts."""
         self._fonts_loading = False
         self._fonts = fonts
+        self.fonts_table.setSortingEnabled(False)
         self.fonts_table.setRowCount(len(fonts))
 
         for i, font in enumerate(fonts):
@@ -283,9 +285,11 @@ class ServerInfoTab(QWidget):
             faces_item = QTableWidgetItem(faces_str)
             self.fonts_table.setItem(i, 1, faces_item)
 
-            # PDF Embedded
+            # PDF Embedded (UserRole stores int for correct sorting: 1=Yes, 0=No)
             pdf_embedded = font.get("pdfEmbedded", False)
-            embedded_item = QTableWidgetItem("Yes" if pdf_embedded else "No")
+            embedded_item = QTableWidgetItem()
+            embedded_item.setData(Qt.ItemDataRole.DisplayRole, "Yes" if pdf_embedded else "No")
+            embedded_item.setData(Qt.ItemDataRole.UserRole, 1 if pdf_embedded else 0)
             embedded_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.fonts_table.setItem(i, 2, embedded_item)
 
@@ -295,6 +299,7 @@ class ServerInfoTab(QWidget):
             source_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.fonts_table.setItem(i, 3, source_item)
 
+        self.fonts_table.setSortingEnabled(True)
         self.fonts_count_label.setText(f"{len(fonts)} font(s) available")
         self._check_loading_complete()
 

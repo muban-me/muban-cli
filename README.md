@@ -365,7 +365,7 @@ muban generate TEMPLATE_ID -p title="Report" -p year=2025 -p amount=15750.25
 # Different output formats
 muban generate TEMPLATE_ID -F xlsx -o report.xlsx
 muban generate TEMPLATE_ID -F docx -o report.docx
-muban generate TEMPLATE_ID -F html -o report.html
+muban generate TEMPLATE_ID -F html -o report.zip
 muban generate TEMPLATE_ID -F txt -o report.txt
 
 # Using parameter file
