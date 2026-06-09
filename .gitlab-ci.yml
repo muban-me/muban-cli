@@ -10,7 +10,6 @@ cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .cache/pip
-    - .venv/
 
 # Test job - runs on all branches
 test:
@@ -87,12 +86,6 @@ test:coverage:
     - pip install -e ".[dev,gui]"
   script:
     - xvfb-run -a pytest tests/ -v --tb=short
-
-test:py39:
-  extends: .test-matrix
-  image: python:3.9-slim
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 test:py310:
   extends: .test-matrix
