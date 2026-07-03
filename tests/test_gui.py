@@ -654,18 +654,19 @@ class TestExportOptionsDialog:
         assert dialog.windowTitle() == "Export Options"
 
     def test_export_options_dialog_has_tabs(self, qtbot):
-        """Test export options dialog has General/PDF/HTML/TXT tabs."""
+        """Test export options dialog has General/PDF/HTML/TXT/PNG tabs."""
         from muban_cli.gui.dialogs.export_options_dialog import ExportOptionsDialog
         
         dialog = ExportOptionsDialog()
         qtbot.addWidget(dialog)
         
         assert hasattr(dialog, 'tabs')
-        assert dialog.tabs.count() == 4
+        assert dialog.tabs.count() == 5
         assert dialog.tabs.tabText(0) == "General"
         assert dialog.tabs.tabText(1) == "PDF"
         assert dialog.tabs.tabText(2) == "HTML"
         assert dialog.tabs.tabText(3) == "TXT"
+        assert dialog.tabs.tabText(4) == "PNG"
 
     def test_export_options_dialog_with_icc_profiles(self, qtbot):
         """Test export options dialog with ICC profiles."""
