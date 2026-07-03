@@ -127,13 +127,14 @@ class MubanAPIClient:
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
         txt_export_options: Optional[Dict[str, Any]] = None,
+        png_export_options: Optional[Dict[str, Any]] = None,
         ignore_pagination: bool = False
     ) -> Path:
         """Generate a document from a template."""
         return self.templates.generate(
             template_id, output_format, parameters, output_path, filename,
             data, document_locale, pdf_export_options, html_export_options,
-            txt_export_options, ignore_pagination
+            txt_export_options, png_export_options, ignore_pagination
         )
     
     def generate_document_raw(

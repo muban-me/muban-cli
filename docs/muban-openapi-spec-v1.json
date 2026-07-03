@@ -11,7 +11,7 @@
         "license": {
             "name": "S-MIT (Selective MIT)"
         },
-        "version": "1.14.0"
+        "version": "1.17.0"
     },
     "servers": [
         {
@@ -64,6 +64,10 @@
         {
             "name": "Templates",
             "description": "Document template management and generation"
+        },
+        {
+            "name": "Document Post-Processing",
+            "description": "Post-processing operations on existing documents"
         }
     ],
     "paths": {
@@ -1162,7 +1166,7 @@
                     {
                         "name": "format",
                         "in": "path",
-                        "description": "Output format (pdf, xlsx, docx, rtf, html, txt)",
+                        "description": "Output format (pdf, xlsx, docx, rtf, html, txt, png)",
                         "required": true,
                         "schema": {
                             "type": "string"
@@ -1301,6 +1305,97 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoTemplateDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/documents/post-process/pdf": {
+            "post": {
+                "tags": [
+                    "Document Post-Processing"
+                ],
+                "summary": "Post-process PDF document",
+                "description": "Apply post-processing operations to an existing PDF file: font embedding, image compression, CMYK colour conversion, transparency flattening, PDF/A conformance, duplex padding, and encryption. Operations use the same pipeline as document generation. The input file is not stored permanently.",
+                "operationId": "postProcessPdf",
+                "parameters": [
+                    {
+                        "name": "filename",
+                        "in": "query",
+                        "description": "Desired filename for the response (optional, .pdf extension ensured)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file",
+                                    "options"
+                                ],
+                                "type": "object",
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "description": "PDF file to post-process",
+                                        "format": "binary"
+                                    },
+                                    "options": {
+                                        "type": "string",
+                                        "description": "Post-processing options JSON (same schema as pdfExportOptions in generation)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "PDF post-processed successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input — not a PDF file or invalid options",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "File too large",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         }
@@ -1503,22 +1598,22 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "Bulk submission processed (check response for individual failures)",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BulkAsyncResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid request format",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoBulkAsyncResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Bulk submission processed (check response for individual failures)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkAsyncResponseDto"
                                 }
                             }
                         }
@@ -1592,22 +1687,22 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Integrity verified successfully - file is unchanged",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "403": {
                         "description": "Forbidden - admin role required",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoString"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Integrity verified successfully - file is unchanged",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -1728,8 +1823,8 @@
                 "description": "Recalculates and updates HMAC-SHA256 digests for all templates in the system. Use this operation after changing the file.integrity.secret-key configuration or when migrating templates. Returns a map with template IDs as keys and status ('SUCCESS' or error message) as values. Returns 200 for all success, 500 for all failures, or 207 Multi-Status for partial success. (Admin role required)",
                 "operationId": "regenerateAllDigests",
                 "responses": {
-                    "200": {
-                        "description": "All digests regenerated successfully",
+                    "500": {
+                        "description": "All digest regenerations failed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1738,8 +1833,18 @@
                             }
                         }
                     },
-                    "500": {
-                        "description": "All digest regenerations failed",
+                    "207": {
+                        "description": "Multi-Status - some digests regenerated successfully, some failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "All digests regenerated successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1754,16 +1859,6 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoMapStringString"
-                                }
-                            }
-                        }
-                    },
-                    "207": {
-                        "description": "Multi-Status - some digests regenerated successfully, some failed",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseDto"
                                 }
                             }
                         }
@@ -2800,6 +2895,7 @@
                                 "TEMPLATE_TAGS_ADDED",
                                 "TEMPLATE_TAGS_DELETED",
                                 "TEMPLATE_TAG_KEY_DELETED",
+                                "DOCUMENT_POSTPROCESSED",
                                 "INTEGRITY_DIGEST_REGENERATED",
                                 "INTEGRITY_CHECK_PERFORMED",
                                 "INTEGRITY_CHECK_PASSED",
@@ -3456,16 +3552,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Result found",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AsyncResultDto"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Request not found or not owned by user",
                         "content": {
@@ -3482,6 +3568,16 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoAsyncResultDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Result found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AsyncResultDto"
                                 }
                             }
                         }
@@ -3592,12 +3688,6 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Document downloaded successfully",
-                        "content": {
-                            "application/octet-stream": {}
-                        }
-                    },
                     "404": {
                         "description": "Request not found or result not in queue",
                         "content": {
@@ -3626,6 +3716,12 @@
                                     "type": "object"
                                 }
                             }
+                        }
+                    },
+                    "200": {
+                        "description": "Document downloaded successfully",
+                        "content": {
+                            "application/octet-stream": {}
                         }
                     },
                     "401": {
@@ -3820,22 +3916,22 @@
                 "description": "Returns queue depth, performance metrics, throughput, and error rates for async document generation",
                 "operationId": "getMetrics",
                 "responses": {
-                    "200": {
-                        "description": "Metrics retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AsyncMetricsDto"
-                                }
-                            }
-                        }
-                    },
                     "403": {
                         "description": "Access denied - requires ROLE_ADMIN",
                         "content": {
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseDtoAsyncMetricsDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Metrics retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AsyncMetricsDto"
                                 }
                             }
                         }
@@ -4416,6 +4512,9 @@
                     "txtExportOptions": {
                         "$ref": "#/components/schemas/TxtExportOptionsDto"
                     },
+                    "pngExportOptions": {
+                        "$ref": "#/components/schemas/PngExportOptionsDto"
+                    },
                     "ignorePagination": {
                         "type": "boolean",
                         "description": "Optional pagination control. When true, ignores pagination and renders as continuous content",
@@ -4614,6 +4713,12 @@
                         "description": "ICC profile name for converting RGB images to CMYK colour space. When set, all RGB raster images are converted to CMYK using the specified ICC colour profile for accurate print reproduction. Profile must be available in classpath:icc/. Leave empty to keep original colour space.",
                         "example": "coated-fogra39"
                     },
+                    "cmykPreserveBlack": {
+                        "type": "boolean",
+                        "description": "Use Preserve Black during RGB→CMYK conversion. When true (default), achromatic RGB sources (R==G==B in vector content; matching pixels in rasters) are mapped to K-only CMYK instead of the composite black an ICC transform would produce. Improves text sharpness on press and reduces ink consumption. Set to false to keep the legacy v1.15.6 ICC-only behaviour.",
+                        "example": true,
+                        "default": true
+                    },
                     "flattenTransparency": {
                         "type": "boolean",
                         "description": "Remove unnecessary transparency groups from PDF pages. JasperReports/FOP often inject /Group /Transparency on every page even when no real transparency is used, slowing print RIP processing. When true, redundant transparency groups are stripped. Default is false.",
@@ -4631,6 +4736,23 @@
                 "example": {
                     "iccProfile": "pso-coated-v3",
                     "pdfaConformance": "PDF/A-1b"
+                }
+            },
+            "PngExportOptionsDto": {
+                "type": "object",
+                "properties": {
+                    "zoomRatio": {
+                        "maximum": 4.0,
+                        "minimum": 0.5,
+                        "type": "number",
+                        "description": "Zoom ratio for PNG output resolution. 1.0 = native page size (~72 DPI equivalent), 2.0 = double resolution (~150 DPI), 3.0 = triple (~216 DPI). Higher values produce sharper images but larger file sizes. If omitted, defaults to 1.0.",
+                        "format": "float",
+                        "example": 2.0
+                    }
+                },
+                "description": "PNG-specific export options for controlling output image resolution",
+                "example": {
+                    "zoomRatio": 2.0
                 }
             },
             "TxtExportOptionsDto": {
@@ -4944,7 +5066,7 @@
                     },
                     "format": {
                         "type": "string",
-                        "description": "Output format: PDF, XLSX, DOCX, RTF, HTML, TXT",
+                        "description": "Output format: PDF, XLSX, DOCX, RTF, HTML, TXT, PNG",
                         "example": "PDF"
                     },
                     "parameters": {
@@ -5021,6 +5143,14 @@
                             "description": "TXT-specific export options (character grid dimensions)"
                         },
                         "description": "TXT-specific export options (character grid dimensions)"
+                    },
+                    "pngExportOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "description": "PNG-specific export options (zoom ratio)"
+                        },
+                        "description": "PNG-specific export options (zoom ratio)"
                     },
                     "ignorePagination": {
                         "type": "boolean",
@@ -5515,6 +5645,7 @@
                             "TEMPLATE_TAGS_ADDED",
                             "TEMPLATE_TAGS_DELETED",
                             "TEMPLATE_TAG_KEY_DELETED",
+                            "DOCUMENT_POSTPROCESSED",
                             "INTEGRITY_DIGEST_REGENERATED",
                             "INTEGRITY_CHECK_PERFORMED",
                             "INTEGRITY_CHECK_PASSED",

@@ -240,6 +240,7 @@ class TemplatesAPI:
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
         txt_export_options: Optional[Dict[str, Any]] = None,
+        png_export_options: Optional[Dict[str, Any]] = None,
         ignore_pagination: bool = False
     ) -> Path:
         """
@@ -247,7 +248,7 @@ class TemplatesAPI:
         
         Args:
             template_id: Template UUID
-            output_format: Output format (pdf, xlsx, docx, rtf, html, txt)
+            output_format: Output format (pdf, xlsx, docx, rtf, html, txt, png)
             parameters: List of parameter name/value pairs
             output_path: Optional output path
             filename: Optional custom filename
@@ -256,6 +257,7 @@ class TemplatesAPI:
             pdf_export_options: PDF-specific options
             html_export_options: HTML-specific options
             txt_export_options: TXT-specific options
+            png_export_options: PNG-specific options (zoomRatio)
             ignore_pagination: Whether to ignore pagination
         
         Returns:
@@ -275,6 +277,8 @@ class TemplatesAPI:
             request_data["htmlExportOptions"] = html_export_options
         if txt_export_options:
             request_data["txtExportOptions"] = txt_export_options
+        if png_export_options:
+            request_data["pngExportOptions"] = png_export_options
         if ignore_pagination:
             request_data["ignorePagination"] = ignore_pagination
         

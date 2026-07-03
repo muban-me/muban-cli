@@ -29,7 +29,7 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option(
         '--output-format', '-F',
         'doc_format',
-        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html', 'txt'], case_sensitive=False),
+        type=click.Choice(['pdf', 'xlsx', 'docx', 'rtf', 'html', 'txt', 'png'], case_sensitive=False),
         default='pdf',
         help='Output document format'
     )
@@ -55,6 +55,7 @@ def register_generate_commands(cli: click.Group) -> None:
     @click.option('--txt-page-width-chars', type=int, help='TXT page width in characters (overrides char width)')
     @click.option('--txt-page-height-chars', type=int, help='TXT page height in character rows (overrides char height)')
     @click.option('--txt-trim-line-right', is_flag=True, help='Trim trailing whitespace from TXT lines')
+    @click.option('--png-zoom', type=float, help='PNG zoom ratio for output resolution (0.5-4.0, default: 1.0)')
     @pass_context
     @require_config
     def generate_document(
@@ -87,6 +88,7 @@ def register_generate_commands(cli: click.Group) -> None:
         txt_page_width_chars: Optional[int],
         txt_page_height_chars: Optional[int],
         txt_trim_line_right: bool,
+        png_zoom: Optional[float],
     ):
         """
         Generate a document from a template.
@@ -98,6 +100,7 @@ def register_generate_commands(cli: click.Group) -> None:
           muban generate abc123 --data-file data.json -o report.pdf
           muban generate abc123 --pdf-pdfa PDF/A-1b --locale pl_PL
           muban generate abc123 -F txt --txt-page-width-chars 80 --txt-trim-line-right
+          muban generate abc123 -F png --png-zoom 2.0 -o pages.zip
           muban generate abc123 --pdf-image-compression 0.75 --pdf-flatten-transparency
           muban generate abc123 -b '{"parameters":[{"name":"title","value":"Test"}]}'
           muban generate abc123 -B request.json -F pdf
@@ -218,6 +221,11 @@ def register_generate_commands(cli: click.Group) -> None:
             if txt_trim_line_right:
                 txt_options['trimLineRight'] = True
         
+        # Build PNG options
+        png_options = None
+        if png_zoom is not None:
+            png_options = {'zoomRatio': png_zoom}
+        
         try:
             with MubanAPIClient(ctx.config_manager.get()) as client:
                 if not quiet:
@@ -233,6 +241,7 @@ def register_generate_commands(cli: click.Group) -> None:
                     document_locale=locale,
                     pdf_export_options=pdf_options,
                     txt_export_options=txt_options,
+                    png_export_options=png_options,
                     ignore_pagination=no_pagination
                 )
                 

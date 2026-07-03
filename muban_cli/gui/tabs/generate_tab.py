@@ -56,6 +56,7 @@ class GenerateWorker(QThread):
         pdf_export_options: Optional[Dict[str, Any]] = None,
         html_export_options: Optional[Dict[str, Any]] = None,
         txt_export_options: Optional[Dict[str, Any]] = None,
+        png_export_options: Optional[Dict[str, Any]] = None,
         document_locale: Optional[str] = None,
         ignore_pagination: bool = False,
     ):
@@ -69,6 +70,7 @@ class GenerateWorker(QThread):
         self.pdf_export_options = pdf_export_options
         self.html_export_options = html_export_options
         self.txt_export_options = txt_export_options
+        self.png_export_options = png_export_options
         self.document_locale = document_locale
         self.ignore_pagination = ignore_pagination
 
@@ -85,6 +87,7 @@ class GenerateWorker(QThread):
                 pdf_export_options=self.pdf_export_options,
                 html_export_options=self.html_export_options,
                 txt_export_options=self.txt_export_options,
+                png_export_options=self.png_export_options,
                 document_locale=self.document_locale,
                 ignore_pagination=self.ignore_pagination,
             )
@@ -197,6 +200,7 @@ class GenerateTab(QWidget):
         self._pdf_options: Dict[str, Any] = {}
         self._html_options: Dict[str, Any] = {}
         self._txt_options: Dict[str, Any] = {}
+        self._png_options: Dict[str, Any] = {}
         self._document_locale: Optional[str] = None
         self._ignore_pagination: bool = False
         self._setup_ui()
@@ -326,7 +330,7 @@ class GenerateTab(QWidget):
 
         # Format (display uppercase, store lowercase as item data for API calls)
         self.format_combo = QComboBox()
-        for fmt in ["pdf", "xlsx", "docx", "rtf", "html", "txt"]:
+        for fmt in ["pdf", "xlsx", "docx", "rtf", "html", "txt", "png"]:
             self.format_combo.addItem(fmt.upper(), fmt)
         self.format_combo.currentIndexChanged.connect(self._on_format_changed)
         output_layout.addRow("Format:", self.format_combo)
@@ -589,6 +593,7 @@ class GenerateTab(QWidget):
         pdf_options: Optional[Dict[str, Any]] = None,
         html_options: Optional[Dict[str, Any]] = None,
         txt_options: Optional[Dict[str, Any]] = None,
+        png_options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Assemble the full request body dict from current UI state."""
         params_list = [{"name": k, "value": v} for k, v in params.items()]
@@ -605,6 +610,8 @@ class GenerateTab(QWidget):
             body["htmlExportOptions"] = html_options
         if txt_options:
             body["txtExportOptions"] = txt_options
+        if png_options:
+            body["pngExportOptions"] = png_options
         return body
 
     def _copy_request_json(self):
@@ -613,9 +620,10 @@ class GenerateTab(QWidget):
         pdf_options = self._get_pdf_options() if fmt == "pdf" else None
         html_options = self._get_html_options() if fmt == "html" else None
         txt_options = self._get_txt_options() if fmt == "txt" else None
+        png_options = self._get_png_options() if fmt == "png" else None
         params = self._get_parameters()
         data = self._get_data()
-        body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+        body = self._build_request_body(params, data, pdf_options, html_options, txt_options, png_options)
         text = json.dumps(body, indent=2, ensure_ascii=False)
         app = QApplication.instance()
         if isinstance(app, QApplication):
@@ -655,7 +663,7 @@ class GenerateTab(QWidget):
                     # Simple dict format: {"param_name": "value", ...}
                     # Exclude known request keys that aren't parameters
                     exclude_keys = {"data", "filename", "documentLocale", "pdfExportOptions", 
-                                   "htmlExportOptions", "txtExportOptions", "ignorePagination"}
+                                   "htmlExportOptions", "txtExportOptions", "pngExportOptions", "ignorePagination"}
                     params = {k: v for k, v in request.items() if k not in exclude_keys}
                     data = request.get("data")
                 
@@ -675,6 +683,9 @@ class GenerateTab(QWidget):
                 if "txtExportOptions" in request and isinstance(request["txtExportOptions"], dict):
                     self._txt_options = request["txtExportOptions"]
                     loaded_options.append("txtExportOptions")
+                if "pngExportOptions" in request and isinstance(request["pngExportOptions"], dict):
+                    self._png_options = request["pngExportOptions"]
+                    loaded_options.append("pngExportOptions")
                     
             elif isinstance(request, list):
                 # List format: [{"name": "param", "value": "val"}, ...]
@@ -719,8 +730,8 @@ class GenerateTab(QWidget):
     def _on_format_changed(self, index: int):
         """Update output path extension and export options visibility when format changes."""
         fmt = self._get_format()
-        # HTML format returns a ZIP archive, not a raw .html file
-        _EXT_MAP = {"html": "zip"}
+        # HTML and PNG formats return a ZIP archive
+        _EXT_MAP = {"html": "zip", "png": "zip"}
         ext = _EXT_MAP.get(fmt, fmt)
         current = self.output_input.text()
         if current:
@@ -732,7 +743,7 @@ class GenerateTab(QWidget):
         """Show/hide export options based on selected format."""
         format = self._get_format()
         # Only show export options button for formats that have options
-        show = format in ("pdf", "html", "txt")
+        show = format in ("pdf", "html", "txt", "png")
         self.export_options_btn.setVisible(show)
         self.export_summary_label.setVisible(show)
         self._update_export_summary()
@@ -740,8 +751,8 @@ class GenerateTab(QWidget):
     def _browse_output(self):
         """Browse for output file."""
         fmt = self._get_format()
-        # HTML format returns a ZIP archive, not a raw .html file
-        _EXT_MAP = {"html": "zip"}
+        # HTML and PNG formats return a ZIP archive
+        _EXT_MAP = {"html": "zip", "png": "zip"}
         filter_map = {
             "pdf": "PDF Files (*.pdf)",
             "xlsx": "Excel Files (*.xlsx)",
@@ -749,6 +760,7 @@ class GenerateTab(QWidget):
             "rtf": "RTF Files (*.rtf)",
             "html": "ZIP Archive (*.zip)",
             "txt": "Text Files (*.txt)",
+            "png": "ZIP Archive (*.zip)",
         }
         ext = _EXT_MAP.get(fmt, fmt)
 
@@ -796,6 +808,10 @@ class GenerateTab(QWidget):
         """Get TXT export options."""
         return self._txt_options if self._txt_options else None
 
+    def _get_png_options(self) -> Optional[Dict[str, Any]]:
+        """Get PNG export options."""
+        return self._png_options if self._png_options else None
+
     def _update_data_preview(self):
         """Update the data preview label with a summary."""
         if not self._data_json:
@@ -832,9 +848,10 @@ class GenerateTab(QWidget):
         pdf_options = self._get_pdf_options() if fmt == "pdf" else None
         html_options = self._get_html_options() if fmt == "html" else None
         txt_options = self._get_txt_options() if fmt == "txt" else None
+        png_options = self._get_png_options() if fmt == "png" else None
         params = self._get_parameters()
         data = self._get_data()
-        body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+        body = self._build_request_body(params, data, pdf_options, html_options, txt_options, png_options)
         body_json = json.dumps(body, indent=2, ensure_ascii=False)
 
         dialog = DataEditorDialog(
@@ -881,6 +898,8 @@ class GenerateTab(QWidget):
                 self._html_options = edited["htmlExportOptions"]
             if "txtExportOptions" in edited and isinstance(edited["txtExportOptions"], dict):
                 self._txt_options = edited["txtExportOptions"]
+            if "pngExportOptions" in edited and isinstance(edited["pngExportOptions"], dict):
+                self._png_options = edited["pngExportOptions"]
 
             self._update_export_summary()
             self._log("✓ Request updated from editor")
@@ -895,22 +914,26 @@ class GenerateTab(QWidget):
             pdf_options=self._pdf_options,
             html_options=self._html_options,
             txt_options=self._txt_options,
+            png_options=self._png_options,
             icc_profiles=self._icc_profiles,
             document_locale=self._document_locale,
             ignore_pagination=self._ignore_pagination,
         )
-        # Switch to the appropriate tab (General is tab 0, PDF is 1, HTML is 2, TXT is 3)
+        # Switch to the appropriate tab (General is tab 0, PDF is 1, HTML is 2, TXT is 3, PNG is 4)
         if fmt == "pdf":
             dialog.tabs.setCurrentIndex(1)
         elif fmt == "html":
             dialog.tabs.setCurrentIndex(2)
         elif fmt == "txt":
             dialog.tabs.setCurrentIndex(3)
+        elif fmt == "png":
+            dialog.tabs.setCurrentIndex(4)
 
         if dialog.exec():
             self._pdf_options = dialog.get_pdf_options() or {}
             self._html_options = dialog.get_html_options() or {}
             self._txt_options = dialog.get_txt_options() or {}
+            self._png_options = dialog.get_png_options() or {}
             self._document_locale = dialog.get_document_locale()
             self._ignore_pagination = dialog.get_ignore_pagination()
             self._update_export_summary()
@@ -958,6 +981,10 @@ class GenerateTab(QWidget):
                     format_parts.append(f"{self._txt_options['pageHeightInChars']} rows")
                 if self._txt_options.get("trimLineRight"):
                     format_parts.append("Trim")
+        elif format == "png":
+            if self._png_options:
+                if self._png_options.get("zoomRatio"):
+                    format_parts.append(f"Zoom: {self._png_options['zoomRatio']}x")
         
         # Combine general and format-specific parts
         all_parts = general_parts + format_parts
@@ -1001,10 +1028,11 @@ class GenerateTab(QWidget):
         pdf_options = self._get_pdf_options() if format == "pdf" else None
         html_options = self._get_html_options() if format == "html" else None
         txt_options = self._get_txt_options() if format == "txt" else None
+        png_options = self._get_png_options() if format == "png" else None
         
         # Build request body for debug logging (mirrors what API client does)
         params = self._get_parameters()
-        request_body = self._build_request_body(params, data, pdf_options, html_options, txt_options)
+        request_body = self._build_request_body(params, data, pdf_options, html_options, txt_options, png_options)
 
         # Log request body in debug mode
         logger.debug("Generate document request body:\n%s", json.dumps(request_body, indent=2, ensure_ascii=False))
@@ -1019,6 +1047,7 @@ class GenerateTab(QWidget):
             pdf_options,
             html_options,
             txt_options,
+            png_options,
             self._document_locale,
             self._ignore_pagination,
         )

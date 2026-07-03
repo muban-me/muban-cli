@@ -1,5 +1,5 @@
 """
-Export Options Dialog - Configure PDF, HTML, and TXT export options.
+Export Options Dialog - Configure PDF, HTML, TXT, and PNG export options.
 """
 
 from typing import Optional, Dict, Any, List
@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 
 
 class ExportOptionsDialog(QDialog):
-    """Dialog for configuring PDF, HTML, and TXT export options."""
+    """Dialog for configuring PDF, HTML, TXT, and PNG export options."""
 
     def __init__(
         self,
@@ -30,6 +30,7 @@ class ExportOptionsDialog(QDialog):
         pdf_options: Optional[Dict[str, Any]] = None,
         html_options: Optional[Dict[str, Any]] = None,
         txt_options: Optional[Dict[str, Any]] = None,
+        png_options: Optional[Dict[str, Any]] = None,
         icc_profiles: Optional[List[str]] = None,
         document_locale: Optional[str] = None,
         ignore_pagination: bool = False,
@@ -38,6 +39,7 @@ class ExportOptionsDialog(QDialog):
         self._pdf_options = pdf_options or {}
         self._html_options = html_options or {}
         self._txt_options = txt_options or {}
+        self._png_options = png_options or {}
         self._icc_profiles = icc_profiles or []
         self._document_locale = document_locale or ""
         self._ignore_pagination = ignore_pagination
@@ -366,6 +368,32 @@ class ExportOptionsDialog(QDialog):
         txt_layout.addStretch()
         self.tabs.addTab(txt_widget, "TXT")
 
+        # PNG Tab
+        png_widget = QWidget()
+        png_layout = QVBoxLayout(png_widget)
+
+        resolution_group = QGroupBox("Output Resolution")
+        resolution_layout = QFormLayout(resolution_group)
+
+        self.png_zoom_ratio = QDoubleSpinBox()
+        self.png_zoom_ratio.setRange(0.5, 4.0)
+        self.png_zoom_ratio.setDecimals(1)
+        self.png_zoom_ratio.setSingleStep(0.5)
+        self.png_zoom_ratio.setValue(1.0)
+        self.png_zoom_ratio.setSuffix("x")
+        self.png_zoom_ratio.setToolTip(
+            "Zoom ratio for PNG output resolution.\n"
+            "1.0 = native page size (~72 DPI equivalent)\n"
+            "2.0 = double resolution (~150 DPI)\n"
+            "3.0 = triple (~216 DPI).\n"
+            "Higher values produce sharper images but larger file sizes."
+        )
+        resolution_layout.addRow("Zoom Ratio:", self.png_zoom_ratio)
+        png_layout.addWidget(resolution_group)
+
+        png_layout.addStretch()
+        self.tabs.addTab(png_widget, "PNG")
+
         # Buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -458,6 +486,11 @@ class ExportOptionsDialog(QDialog):
             self.txt_line_separator.setText(txt["lineSeparator"])
         if txt.get("pageSeparator"):
             self.txt_page_separator.setText(txt["pageSeparator"])
+
+        # PNG options
+        png = self._png_options
+        if png.get("zoomRatio"):
+            self.png_zoom_ratio.setValue(png["zoomRatio"])
 
     def update_icc_profiles(self, profiles: List[str]):
         """Update ICC profiles list."""
@@ -634,3 +667,17 @@ class ExportOptionsDialog(QDialog):
         if self.txt_trim_line_right.isChecked():
             parts.append("Trim")
         return ", ".join(parts) if parts else "Default"
+
+    def get_png_options(self) -> Optional[Dict[str, Any]]:
+        """Get PNG export options."""
+        zoom = self.png_zoom_ratio.value()
+        if zoom != 1.0:
+            return {"zoomRatio": zoom}
+        return None
+
+    def get_png_summary(self) -> str:
+        """Get a brief summary of PNG options."""
+        zoom = self.png_zoom_ratio.value()
+        if zoom != 1.0:
+            return f"Zoom: {zoom}x"
+        return "Default"

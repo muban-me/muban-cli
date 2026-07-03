@@ -12,7 +12,7 @@ A robust command-line interface for the **Muban Document Generation Service**. M
 - **Template Management** - List, upload, download, and delete templates (JRXML and DOCX)
 - **Tag Management** - Organize templates with key-value tags, filter by tags
 - **Template Packaging** - Package JRXML or DOCX templates with auto-detected image assets and optional fonts into deployable ZIP packages
-- **Document Generation** - Generate PDF, XLSX, DOCX, RTF, HTML, and TXT documents
+- **Document Generation** - Generate PDF, XLSX, DOCX, RTF, HTML, TXT, and PNG documents
 - **Async Processing** - Submit bulk document generation jobs and monitor progress
 - **Search & Filter** - Search templates and filter by tags or audit logs
 - **Audit & Monitoring** - Access audit logs and security dashboards (admin)
@@ -368,6 +368,10 @@ muban generate TEMPLATE_ID -F docx -o report.docx
 muban generate TEMPLATE_ID -F html -o report.zip
 muban generate TEMPLATE_ID -F txt -o report.txt
 
+# PNG output (returns ZIP with page images)
+muban generate TEMPLATE_ID -F png -o pages.zip
+muban generate TEMPLATE_ID -F png --png-zoom 2.0 -o pages.zip  # Double resolution
+
 # Using parameter file
 muban generate TEMPLATE_ID --params-file params.json
 
@@ -666,7 +670,7 @@ The GUI provides a tabbed interface with the following sections:
 
 #### **⚙️ Generate Tab**
 
-- Select template and output format (PDF, XLSX, DOCX, RTF, HTML, TXT)
+- Select template and output format (PDF, XLSX, DOCX, RTF, HTML, TXT, PNG)
 - Fill in template parameters with a dynamic form
 - Load full request JSON from file (parameters, data, and export options in one step)
 - **Copy Request JSON** — copy the assembled request body to clipboard for debugging or reuse
@@ -676,6 +680,7 @@ The GUI provides a tabbed interface with the following sections:
   - **General options**: Document locale for number/date/currency formatting, ignore pagination for continuous output
   - **PDF options**: PDF/A compliance, embedded ICC profiles, password protection, permission settings, duplex padding, image compression quality, flatten transparency, font embedding substitute, CMYK conversion profile (dropdown from server ICC profiles)
   - **HTML options**: Resource embedding, single-file output, custom CSS
+  - **PNG options**: Zoom ratio for output resolution
   - **TXT options**: Character grid dimensions, page size in characters, line/page separators, trailing whitespace trimming
 - Save generated documents to local filesystem
 

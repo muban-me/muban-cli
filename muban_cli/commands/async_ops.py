@@ -141,7 +141,7 @@ def register_async_commands(cli: click.Group) -> None:
     @common_options
     @click.option('--template', '-t', required=True, help='Template ID')
     @click.option('--doc-format', '-F', 'output_fmt', default='PDF', 
-                  type=click.Choice(['PDF', 'XLSX', 'DOCX', 'RTF', 'HTML', 'TXT'], case_sensitive=False),
+                  type=click.Choice(['PDF', 'XLSX', 'DOCX', 'RTF', 'HTML', 'TXT', 'PNG'], case_sensitive=False),
                   help='Document output format')
     @click.option('--param', '-p', multiple=True, help='Parameter in name=value format')
     @click.option('--data-file', '-d', type=click.Path(exists=True, path_type=Path),
