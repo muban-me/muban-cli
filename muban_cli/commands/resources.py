@@ -25,7 +25,7 @@ def register_resource_commands(cli: click.Group) -> None:
     @click.option(
         '--show-all', '-a',
         is_flag=True,
-        help='Show all fonts including template-bundled ones (default: only server fonts)'
+        help='Show all fonts including template-bundled ones (default: SYSTEM + SERVICE fonts only)'
     )
     @common_options
     @pass_context
@@ -33,8 +33,8 @@ def register_resource_commands(cli: click.Group) -> None:
     def list_fonts(ctx: MubanContext, show_all: bool, verbose: bool, quiet: bool, output_format: str, truncate_length: int):
         """List available fonts for document generation.
         
-        By default, shows only server-installed fonts (source=SERVER).
-        Use --show-all to include fonts bundled with templates.
+        By default, shows system and service fonts (source=SYSTEM, SERVICE).
+        Use --show-all to include fonts bundled with templates (source=TEMPLATE).
         """
         setup_logging(verbose, quiet)
         fmt = OutputFormat(output_format)
@@ -44,9 +44,9 @@ def register_resource_commands(cli: click.Group) -> None:
                 result = client.get_fonts()
                 fonts = result.get('data', [])
                 
-                # Filter by source unless --show-all is specified
+                # Filter to SYSTEM + SERVICE fonts unless --show-all is specified
                 if not show_all:
-                    fonts = [f for f in fonts if f.get('source') == 'SERVER']
+                    fonts = [f for f in fonts if f.get('source') in ('SYSTEM', 'SERVICE')]
                 
                 if fmt == OutputFormat.JSON:
                     print_json(fonts)
@@ -77,7 +77,7 @@ def register_resource_commands(cli: click.Group) -> None:
                     if fmt == OutputFormat.CSV:
                         print_csv(headers, rows)
                     else:
-                        filter_note = "" if show_all else " (server fonts only, use --show-all for all)"
+                        filter_note = "" if show_all else " (system + service fonts only, use --show-all for all)"
                         click.echo(f"\nFonts ({total} total){filter_note}:\n")
                         print_table(headers, rows)
                     
