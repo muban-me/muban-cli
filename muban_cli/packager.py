@@ -672,6 +672,50 @@ class JRXMLPackager:
                 reports_dir_value=reports_dir_value
             ))
         
+        # Handle complex subreport/image expressions (ternary, conditionals, etc.)
+        # When ASSET_PATTERN can't match because the expression after REPORTS_DIR
+        # is complex (e.g., $P{REPORTS_DIR} + (cond ? "a.jasper" : "b.jasper")),
+        # we greedily extract ALL string literals from the expression.
+        complex_pattern = re.compile(
+            r'<element\s+kind="(?:subreport|image)"[^>]*>.*?<expression>\s*<!\[CDATA\[(.*?)\]\]>\s*</expression>',
+            re.MULTILINE | re.DOTALL
+        )
+        for match in complex_pattern.finditer(content):
+            expr = match.group(1).strip()
+            # Only process if REPORTS_DIR is referenced and ASSET_PATTERN didn't match
+            if self.reports_dir_param not in expr:
+                continue
+            if self.ASSET_PATTERN.search(expr):
+                continue  # Already handled by ASSET_PATTERN
+            
+            # Extract ALL string literals from the expression
+            string_literals = re.findall(r'"([^"]+)"', expr)
+            for asset_path in string_literals:
+                # Skip if already seen or not a path
+                if asset_path in seen_paths:
+                    continue
+                if '/' not in asset_path and '.' not in asset_path:
+                    continue  # Not a file path
+                
+                # Determine asset type from extension
+                ext = Path(asset_path).suffix.lower()
+                if ext in self.IMAGE_EXTENSIONS:
+                    asset_type = "image"
+                elif ext in self.SUBREPORT_EXTENSIONS:
+                    asset_type = "subreport"
+                else:
+                    continue  # Skip — only images and subreports are relevant
+                
+                seen_paths.add(asset_path)
+                line_number = content[:match.start()].count('\n') + 1
+                assets.append(AssetReference(
+                    path=asset_path,
+                    source_file=jrxml_path,
+                    line_number=line_number,
+                    asset_type=asset_type,
+                    reports_dir_value=reports_dir_value
+                ))
+        
         return assets
     
     def _extract_asset_references_recursive(
