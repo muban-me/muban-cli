@@ -359,10 +359,73 @@ class TestRecursiveSubreportAnalysis:
         assert result.success
         paths = [a.path for a in result.assets_found]
         
-        # Should include both subreport and nested asset
+        # *.jasper is skipped by default; .jrxml source and nested asset are included
+        assert "subreports/child.jasper" not in paths
+        assert "subreports/child.jrxml" in paths
+        assert "assets/img/nested-icon.png" in paths
+        assert any(a.path == "subreports/child.jasper" for a in result.skipped_jasper)
+    
+    def test_recursive_subreport_assets_with_include_jasper(self, temp_dir, packager):
+        """Test that assets from subreports are included with explicit include_jasper."""
+        # Create directory structure
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+        assets_dir = temp_dir / "assets" / "img"
+        assets_dir.mkdir(parents=True)
+        
+        # Create main template
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/child.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        
+        # Create subreport
+        subreport_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="child">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["../"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="image">
+                <expression><![CDATA[$P{REPORTS_DIR} + "assets/img/nested-icon.png"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        subreport_jrxml = subreports_dir / "child.jrxml"
+        subreport_jrxml.write_text(subreport_content, encoding='utf-8')
+        
+        # Create .jasper file (compiler looks for it)
+        (subreports_dir / "child.jasper").write_bytes(b"dummy jasper")
+        
+        # Create asset files
+        (assets_dir / "nested-icon.png").write_bytes(b"dummy png")
+        
+        # Run with explicit include_jasper=True
+        result = packager.package(main_jrxml, dry_run=True, include_jasper=True)
+        
+        assert result.success
+        paths = [a.path for a in result.assets_found]
+        
+        # Should include subreport, .jrxml source and nested asset; nothing skipped
         assert "subreports/child.jasper" in paths
         assert "subreports/child.jrxml" in paths
         assert "assets/img/nested-icon.png" in paths
+        assert result.skipped_jasper == []
     
     def test_subreport_source_tracking(self, temp_dir, packager):
         """Test that subreport source is tracked for nested assets."""
@@ -417,7 +480,7 @@ class TestRecursiveSubreportAnalysis:
         assert nested_asset.subreport_source == "subreports/sub.jrxml"
 
     def test_jrxml_source_included_alongside_jasper(self, temp_dir, packager):
-        """Test that raw .jrxml source files are included alongside .jasper subreports."""
+        """Test that raw .jrxml source files are included alongside .jasper subreports when opted in."""
         subreports_dir = temp_dir / "subreports"
         subreports_dir.mkdir()
 
@@ -448,14 +511,15 @@ class TestRecursiveSubreportAnalysis:
         (subreports_dir / "report.jrxml").write_text(subreport_content, encoding='utf-8')
         (subreports_dir / "report.jasper").write_bytes(b"dummy")
 
-        result = packager.package(main_jrxml, dry_run=True)
+        result = packager.package(main_jrxml, dry_run=True, include_jasper=True)
         paths = [a.path for a in result.assets_found]
 
         assert "subreports/report.jasper" in paths
         assert "subreports/report.jrxml" in paths
+        assert result.skipped_jasper == []
 
     def test_jrxml_source_not_included_when_missing(self, temp_dir, packager):
-        """Test that missing .jrxml source files are silently skipped."""
+        """Test that missing .jrxml source files result in .jasper being skipped by default."""
         subreports_dir = temp_dir / "subreports"
         subreports_dir.mkdir()
 
@@ -482,8 +546,92 @@ class TestRecursiveSubreportAnalysis:
         result = packager.package(main_jrxml, dry_run=True)
         paths = [a.path for a in result.assets_found]
 
-        assert "subreports/report.jasper" in paths
+        # .jasper is skipped by default (orphaned - no .jrxml to recompile from)
+        assert "subreports/report.jasper" not in paths
         assert "subreports/report.jrxml" not in paths
+        assert any(a.path == "subreports/report.jasper" for a in result.skipped_jasper)
+    
+    def test_orphaned_jasper_warns_when_explicitly_included(self, temp_dir, packager):
+        """Test that including a .jasper without .jrxml source raises a warning."""
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/report.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+
+        # Only .jasper, no .jrxml source
+        (subreports_dir / "report.jasper").write_bytes(b"dummy")
+
+        result = packager.package(main_jrxml, dry_run=True, include_jasper=True)
+        paths = [a.path for a in result.assets_found]
+
+        assert "subreports/report.jasper" in paths
+        assert result.skipped_jasper == []
+        assert any("no .jrxml source" in w for w in result.warnings)
+    
+    def test_stale_jasper_warns_when_explicitly_included(self, temp_dir, packager):
+        """Test that a .jasper older than its .jrxml source triggers a stale warning."""
+        import os
+        
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/report.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+
+        subreport_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="report">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+</jasperReport>
+'''
+        jrxml_file = subreports_dir / "report.jrxml"
+        jrxml_file.write_text(subreport_content, encoding='utf-8')
+        jasper_file = subreports_dir / "report.jasper"
+        jasper_file.write_bytes(b"dummy")
+        
+        # Make .jasper older than .jrxml
+        os.utime(jasper_file, (1_000_000_000, 1_000_000_000))
+        os.utime(jrxml_file, (2_000_000_000, 2_000_000_000))
+
+        result = packager.package(main_jrxml, dry_run=True, include_jasper=True)
+
+        assert result.success
+        assert any("Stale compiled subreport" in w for w in result.warnings)
+        
+        # Fresh .jasper must not trigger the warning
+        os.utime(jasper_file, (3_000_000_000, 3_000_000_000))
+        fresh_result = packager.package(main_jrxml, dry_run=True, include_jasper=True)
+        assert not any("Stale compiled subreport" in w for w in fresh_result.warnings)
 
 
 class TestPOSIXPathNormalization:
@@ -638,6 +786,103 @@ class TestZIPCreation:
         
         assert result.success
         assert not output_path.exists()
+    
+    def test_create_zip_excludes_jasper_by_default(self, temp_dir, packager):
+        """Test that *.jasper files are excluded from the ZIP by default, .jrxml sources included."""
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+        assets_dir = temp_dir / "assets" / "img"
+        assets_dir.mkdir(parents=True)
+        
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/child.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        
+        subreport_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="child">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["../"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="image">
+                <expression><![CDATA[$P{REPORTS_DIR} + "assets/img/nested-icon.png"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        (subreports_dir / "child.jrxml").write_text(subreport_content, encoding='utf-8')
+        (subreports_dir / "child.jasper").write_bytes(b"dummy jasper")
+        (assets_dir / "nested-icon.png").write_bytes(b"dummy png")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(main_jrxml, output_path)
+        
+        assert result.success
+        assert output_path.exists()
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "main.jrxml" in names
+            assert "subreports/child.jrxml" in names
+            assert "assets/img/nested-icon.png" in names
+            assert "subreports/child.jasper" not in names
+    
+    def test_create_zip_includes_jasper_when_opted_in(self, temp_dir, packager):
+        """Test that *.jasper files are included in the ZIP when include_jasper=True."""
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+        
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/child.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        
+        subreport_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="child">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["../"]]></defaultValueExpression>
+    </parameter>
+</jasperReport>
+'''
+        (subreports_dir / "child.jrxml").write_text(subreport_content, encoding='utf-8')
+        (subreports_dir / "child.jasper").write_bytes(b"dummy jasper")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(main_jrxml, output_path, include_jasper=True)
+        
+        assert result.success
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "subreports/child.jasper" in names
+            assert "subreports/child.jrxml" in names
 
 
 class TestPackageResult:

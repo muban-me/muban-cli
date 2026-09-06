@@ -50,6 +50,7 @@ class PackageWorker(QThread):
         reports_dir_param: str,
         dry_run: bool = False,
         fonts_xml_path: Optional[Path] = None,
+        include_jasper: bool = False,
     ):
         super().__init__()
         self.template_path = template_path
@@ -58,10 +59,14 @@ class PackageWorker(QThread):
         self.reports_dir_param = reports_dir_param
         self.dry_run = dry_run
         self.fonts_xml_path = fonts_xml_path
+        self.include_jasper = include_jasper
 
     def run(self):
         try:
-            packager = JRXMLPackager(reports_dir_param=self.reports_dir_param)
+            packager = JRXMLPackager(
+                reports_dir_param=self.reports_dir_param,
+                include_jasper=self.include_jasper,
+            )
             result = packager.package(
                 self.template_path,
                 self.output_path,
@@ -211,6 +216,12 @@ class PackageTab(QWidget):
         action_layout = QHBoxLayout()
         self.dry_run_cb = QCheckBox("Dry run (analyze only)")
         action_layout.addWidget(self.dry_run_cb)
+        self.include_jasper_cb = QCheckBox("Include .jasper subreports")
+        self.include_jasper_cb.setToolTip(
+            "Include compiled *.jasper files in the package. Off by default: "
+            "the service recompiles subreports from bundled .jrxml sources."
+        )
+        action_layout.addWidget(self.include_jasper_cb)
         action_layout.addStretch()
 
         self.package_btn = QPushButton("Package Template")
@@ -390,6 +401,7 @@ class PackageTab(QWidget):
             self.reports_dir_input.text(),
             dry_run,
             fonts_xml_path,
+            self.include_jasper_cb.isChecked(),
         )
         self.worker.finished.connect(self._on_package_finished)
         self.worker.error.connect(self._on_package_error)
@@ -408,6 +420,11 @@ class PackageTab(QWidget):
                     self._log(f"\n✓ Package created: {result.output_path}")
                 self._log(f"  Main template: {result.main_template} ({result.template_type})")
                 self._log(f"  Assets: {len(result.assets_included)} included, {len(result.assets_missing)} missing")
+                if result.skipped_jasper:
+                    self._log(
+                        f"  Skipped *.jasper subreports: {len(result.skipped_jasper)} "
+                        f"(service recompiles from bundled .jrxml sources)"
+                    )
                 if result.fonts_included:
                     unique_font_files = len({f.file_path for f in result.fonts_included})
                     self._log(f"  Fonts: {unique_font_files} file(s)")

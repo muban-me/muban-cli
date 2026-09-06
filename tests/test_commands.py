@@ -398,6 +398,7 @@ class TestPackageCommand:
         assert '--fonts-xml' in result.output
         assert '--font-file' in result.output
         assert '--dry-run' in result.output
+        assert '--include-jasper' in result.output
     
     def test_package_requires_jrxml_file(self, runner):
         """Test package command requires a JRXML file argument."""
@@ -485,6 +486,40 @@ class TestPackageCommand:
             mock_packager.package.assert_called_once()
             call_kwargs = mock_packager.package.call_args
             assert call_kwargs.kwargs.get('dry_run') is True
+    
+    def test_package_include_jasper_flag(self, runner, tmp_path):
+        """Test package command passes include_jasper to the packager."""
+        # Create test JRXML file
+        jrxml_file = tmp_path / "test.jrxml"
+        jrxml_file.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports">
+    <detail><band height="100"></band></detail>
+</jasperReport>''')
+        
+        with patch('muban_cli.commands.package.JRXMLPackager') as mock_packager_class:
+            mock_packager = MagicMock()
+            mock_result = MagicMock()
+            mock_result.jrxml_file = jrxml_file
+            mock_result.output_zip = None
+            mock_result.images = []
+            mock_result.subreports = []
+            mock_result.fonts = []
+            mock_result.fonts_xml_files = []
+            mock_result.skipped_jasper = []
+            mock_result.total_size = 1024
+            mock_result.package_size = 0
+            mock_packager.package.return_value = mock_result
+            mock_packager_class.return_value = mock_packager
+            
+            # Default: include_jasper=False passed to constructor
+            result = runner.invoke(cli, ['package', str(jrxml_file)])
+            default_kwargs = mock_packager_class.call_args.kwargs
+            assert default_kwargs.get('include_jasper') is False
+            
+            # Explicit flag: include_jasper=True
+            result = runner.invoke(cli, ['package', str(jrxml_file), '--include-jasper'])
+            flag_kwargs = mock_packager_class.call_args.kwargs
+            assert flag_kwargs.get('include_jasper') is True
     
     def test_package_nonexistent_jrxml(self, runner, tmp_path):
         """Test package command with nonexistent JRXML file."""

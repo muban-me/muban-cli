@@ -263,7 +263,7 @@ muban tags delete TEMPLATE_ID --yes            # Remove all tags
 
 ### Template Packaging
 
-The `package` command packages a template file (JRXML or DOCX) into a ZIP file ready for upload. For JRXML templates, it analyzes the file and includes all dependencies (images, subreports). For DOCX templates, it scans images for ALT text with the `image:` prefix and automatically includes referenced assets (static paths, SpEL expression path candidates, and all files from dynamic directories), along with optional custom fonts.
+The `package` command packages a template file (JRXML or DOCX) into a ZIP file ready for upload. For JRXML templates, it analyzes the file and includes all dependencies (images, subreports). Compiled `*.jasper` subreport files are **not** packaged by default - the service recompiles subreports from the bundled `.jrxml` sources, so stale `.jasper` files in the workspace cannot shadow fresh compilation. Use `--include-jasper` to bundle them explicitly. For DOCX templates, it scans images for ALT text with the `image:` prefix and automatically includes referenced assets (static paths, SpEL expression path candidates, and all files from dynamic directories), along with optional custom fonts.
 
 ```bash
 # Package a JRXML template (creates template.zip)
@@ -283,6 +283,9 @@ muban package template.jrxml --dry-run -v
 
 # Custom REPORTS_DIR parameter name
 muban package template.jrxml --reports-dir-param TEMPLATE_PATH
+
+# Include compiled *.jasper subreport files (explicit opt-in, off by default)
+muban package template.jrxml --include-jasper
 
 # Bundle custom fonts (creates fonts.xml for JasperReports)
 muban package template.jrxml \
@@ -310,7 +313,8 @@ muban package template.docx -u --name "My Letter" --author "John Doe"
 
 - **JRXML & DOCX Support** - Package both JasperReports and DOCX template types
 - **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports (JRXML only)
-- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` source files to include their nested dependencies; raw `.jrxml` sources are also bundled in the ZIP alongside the compiled `.jasper` files (JRXML only)
+- **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` source files to include their nested dependencies; raw `.jrxml` sources are bundled in the ZIP (JRXML only)
+- **No Stale .jasper by Default** - Compiled `*.jasper` files are skipped unless `--include-jasper` is passed; the service recompiles them from the bundled `.jrxml` sources. When opted in, stale `.jasper` files (older than their `.jrxml`) trigger warnings
 - **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
@@ -328,12 +332,17 @@ Main template (JASPER):
   invoice.jrxml
 
 Assets found: 8
-  ✓ subreports/header.jasper
-  ✓ subreports/footer.jasper
+  ✓ subreports/header.jrxml
+  ✓ subreports/footer.jrxml
   ✓ assets/img/logo.png
   ✓ assets/img/signature.png [from subreports/header.jrxml]
   ✓ assets/img/faksymile/* (dynamic: $P{signatureFile}, 3 files included)
   ✗ assets/img/missing.png (missing)
+
+Skipped compiled subreports (*.jasper): 2
+  (The service recompiles subreports from bundled .jrxml sources. Use --include-jasper to bundle compiled files explicitly.)
+  ⊘ subreports/header.jasper
+  ⊘ subreports/footer.jasper
 
 ⚠ Dynamic asset: assets/img/faksymile/* - included all 3 files from directory
 ⚠ Asset not found: assets/img/missing.png (referenced in invoice.jrxml)

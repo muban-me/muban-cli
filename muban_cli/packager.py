@@ -11,6 +11,10 @@ For JRXML templates, the packager:
 3. Creates a ZIP archive preserving the directory structure
 4. Optionally bundles custom fonts with fonts.xml configuration
 
+Compiled *.jasper subreport files are skipped by default (the service
+recompiles them from the bundled .jrxml sources). Use include_jasper=True
+to include them explicitly.
+
 For DOCX templates, the packager:
 1. Parses the DOCX to find image references in ALT text (image: prefix)
 2. Extracts static file paths and SpEL expression path candidates
@@ -66,6 +70,7 @@ class PackageResult:
     fonts_xml_files: List[Path] = field(default_factory=list)  # Font files from fonts.xml
     skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
+    skipped_jasper: List[AssetReference] = field(default_factory=list)  # *.jasper refs not packaged
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     
@@ -90,8 +95,13 @@ class JRXMLPackager:
     For JRXML templates, the packager automatically detects:
     - Image references using the configurable REPORTS_DIR parameter
     - Directory references with dynamic filenames (includes all files)
-    - Subreport references
+    - Subreport references (analyzes .jrxml sources recursively)
     - Font files
+    
+    Compiled *.jasper subreport files are NOT packaged by default. The service
+    recompiles subreports from the bundled .jrxml sources, so stale .jasper files
+    in the workspace cannot shadow fresh compilation. Set include_jasper=True to
+    bundle compiled files explicitly.
     
     For DOCX templates, the packager:
     - Scans images for ALT text starting with 'image:' prefix
@@ -178,15 +188,21 @@ class JRXMLPackager:
     DOCX_WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
     DOCX_WP14_NS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing'
     
-    def __init__(self, reports_dir_param: str = "REPORTS_DIR"):
+    def __init__(self, reports_dir_param: str = "REPORTS_DIR", include_jasper: bool = False):
         """
         Initialize the packager.
         
         Args:
             reports_dir_param: The parameter name used for the reports directory.
                               This can vary between deployments (default: REPORTS_DIR).
+            include_jasper: Whether to include referenced *.jasper files in packages.
+                           Default False: *.jasper files are NOT packaged - the Muban
+                           service recompiles subreports from the bundled .jrxml sources.
+                           Set True (or use --include-jasper in the CLI) to bundle
+                           compiled files explicitly.
         """
         self.reports_dir_param = reports_dir_param
+        self.include_jasper = include_jasper
         self._detected_params: Set[str] = set()
     
     def package(
@@ -195,7 +211,8 @@ class JRXMLPackager:
         output_path: Optional[Path] = None,
         dry_run: bool = False,
         fonts: Optional[List[FontSpec]] = None,
-        fonts_xml_path: Optional[Path] = None
+        fonts_xml_path: Optional[Path] = None,
+        include_jasper: Optional[bool] = None
     ) -> PackageResult:
         """
         Package a JRXML or DOCX template into a ZIP package.
@@ -206,12 +223,20 @@ class JRXMLPackager:
             dry_run: If True, don't create ZIP, just analyze dependencies
             fonts: Optional list of FontSpec objects to include in the package
             fonts_xml_path: Optional path to existing fonts.xml file to include
+            include_jasper: Override the constructor's include_jasper setting for
+                            this call. Default (False): referenced *.jasper files are
+                            skipped and reported in result.skipped_jasper. The service
+                            recompiles subreports from the bundled .jrxml sources.
             
         Returns:
             PackageResult with details about the packaging operation
         """
         result = PackageResult(success=False)
         fonts = fonts or []
+        
+        # Per-call override of jasper inclusion (constructor default applies otherwise)
+        if include_jasper is not None:
+            self.include_jasper = include_jasper
         
         # Validate input
         template_path = Path(template_path).resolve()
@@ -762,6 +787,18 @@ class JRXMLPackager:
                 if jrxml_abs_path.exists():
                     logger.debug(f"Analyzing subreport source: {jrxml_source_path}")
                     
+                    # Guard against stale compiled files when *.jasper is included:
+                    # a .jasper older than its .jrxml source shadows fresh compilation
+                    if self.include_jasper:
+                        jasper_abs_path = (base_dir / asset.path).resolve()
+                        if jasper_abs_path.exists() and jasper_abs_path.is_file():
+                            if jasper_abs_path.stat().st_mtime < jrxml_abs_path.stat().st_mtime:
+                                result.warnings.append(
+                                    f"Stale compiled subreport: {asset.path} is older than its "
+                                    f"source {jrxml_source_path} - the service will recompile it. "
+                                    f"Consider rebuilding the .jasper or omitting it from the package."
+                                )
+                    
                     # Include the raw .jrxml source alongside the .jasper
                     subreport_assets.append(AssetReference(
                         path=jrxml_source_path,
@@ -786,6 +823,12 @@ class JRXMLPackager:
                     subreport_assets.extend(nested_assets)
                 else:
                     logger.debug(f"Subreport source not found: {jrxml_source_path}")
+                    if self.include_jasper:
+                        result.warnings.append(
+                            f"Compiled subreport {asset.path} has no .jrxml source - it will "
+                            f"be packaged as-is, but the service may reject packages without "
+                            f".jrxml sources."
+                        )
         
         # Combine and deduplicate
         all_assets = assets + subreport_assets
@@ -797,6 +840,19 @@ class JRXMLPackager:
             if asset.path not in seen_paths:
                 seen_paths.add(asset.path)
                 unique_assets.append(asset)
+        
+        # By default, do NOT package *.jasper files. The service recompiles
+        # subreports from the bundled .jrxml sources, so stale compiled files
+        # in the workspace would otherwise shadow freshly compiled subreports.
+        if not self.include_jasper:
+            included: List[AssetReference] = []
+            for asset in unique_assets:
+                if asset.asset_type == "subreport" and asset.path.endswith('.jasper'):
+                    if not any(a.path == asset.path for a in result.skipped_jasper):
+                        result.skipped_jasper.append(asset)
+                else:
+                    included.append(asset)
+            unique_assets = included
         
         return unique_assets
 

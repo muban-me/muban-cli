@@ -42,6 +42,14 @@ def validate_font_options(ctx, param, value):
     help='Name of the path parameter in JRXML templates (default: REPORTS_DIR, ignored for DOCX)'
 )
 @click.option(
+    '--include-jasper',
+    is_flag=True,
+    help=(
+        'Include referenced *.jasper files in the package. By default *.jasper files are NOT '
+        'packaged - the service recompiles subreports from the bundled .jrxml sources.'
+    )
+)
+@click.option(
     '--upload', '-u',
     is_flag=True,
     help='Upload the package after creation'
@@ -90,6 +98,7 @@ def package_cmd(
     dry_run: bool,
     verbose: bool,
     reports_dir_param: str,
+    include_jasper: bool,
     upload: bool,
     name: Optional[str],
     author: Optional[str],
@@ -125,6 +134,9 @@ def package_cmd(
       # Use custom path parameter name (JRXML only)
       muban package template.jrxml --reports-dir-param BASE_PATH
       
+      # Include compiled *.jasper subreport files (explicit opt-in)
+      muban package template.jrxml --include-jasper
+      
       # Package and upload in one step
       muban package template.jrxml --upload
       muban package template.docx -u --name "My Report" --author "John"
@@ -140,6 +152,11 @@ def package_cmd(
       - Detects dynamic directories (includes all files)
       - Preserves the asset directory structure
       - Warns about missing assets
+    
+    Compiled *.jasper subreport files are NOT packaged by default. The service
+    recompiles subreports from the bundled .jrxml sources, so stale .jasper files
+    in the workspace cannot shadow fresh compilation. Use --include-jasper to
+    bundle compiled files explicitly (stale files trigger warnings).
       
     \b
     Font options (--font-file, --font-name, --font-face, --embedded) must be
@@ -184,7 +201,7 @@ def package_cmd(
             print_info(f"Including {len(fonts)} font file(s)")
     
     # Create packager and run
-    packager = JRXMLPackager(reports_dir_param=reports_dir_param)
+    packager = JRXMLPackager(reports_dir_param=reports_dir_param, include_jasper=include_jasper)
     result = packager.package(template_file, output, dry_run=dry_run, fonts=fonts, fonts_xml_path=fonts_xml)
     
     # Display results
@@ -341,6 +358,19 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
         click.echo(click.style("  (Fully runtime-determined paths cannot be resolved at compile time)", fg='bright_black'))
         for expr in result.skipped_dynamic:
             click.echo(click.style(f"  ⊘ {expr}", fg='magenta'))
+    
+    # Show skipped compiled subreports (*.jasper)
+    if result.skipped_jasper:
+        click.echo()
+        click.echo(click.style(f"Skipped compiled subreports (*.jasper): {len(result.skipped_jasper)}", bold=True))
+        click.echo(click.style(
+            "  (The service recompiles subreports from bundled .jrxml sources. "
+            "Use --include-jasper to bundle compiled files explicitly.)",
+            fg='bright_black'
+        ))
+        if verbose:
+            for asset in result.skipped_jasper:
+                click.echo(click.style(f"  ⊘ {asset.path}", fg='blue'))
     
     # Show warnings
     if result.warnings:
