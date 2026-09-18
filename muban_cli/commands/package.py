@@ -372,6 +372,16 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
             for asset in result.skipped_jasper:
                 click.echo(click.style(f"  ⊘ {asset.path}", fg='blue'))
     
+    # Show compiled main report bundled via --include-jasper
+    if result.master_jasper_included:
+        click.echo()
+        click.echo(click.style(
+            f"Compiled main report included: {result.master_jasper_included}", bold=True))
+        click.echo(click.style(
+            "  (Bundled after its .jrxml source - the service will skip compilation.)",
+            fg='bright_black'
+        ))
+    
     # Show warnings
     if result.warnings:
         click.echo()

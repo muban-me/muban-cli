@@ -627,6 +627,10 @@ class TestRecursiveSubreportAnalysis:
 
         assert result.success
         assert any("Stale compiled subreport" in w for w in result.warnings)
+        # Stale .jasper must NOT be bundled (the service would load it instead
+        # of compiling the fresh .jrxml source).
+        found_paths = [a.path for a in result.assets_found]
+        assert "subreports/report.jasper" not in found_paths
         
         # Fresh .jasper must not trigger the warning
         os.utime(jasper_file, (3_000_000_000, 3_000_000_000))
@@ -883,6 +887,85 @@ class TestZIPCreation:
             names = zf.namelist()
             assert "subreports/child.jasper" in names
             assert "subreports/child.jrxml" in names
+    
+    def test_create_zip_jasper_entries_after_all_jrxml(self, temp_dir, packager):
+        """ZIP entry order contract: .jasper entries must follow ALL .jrxml entries.
+
+        The Muban service extracts ZIPs sequentially without setting mtimes and
+        skips compilation when an extracted .jasper is not older than its .jrxml.
+        """
+        subreports_dir = temp_dir / "subreports"
+        subreports_dir.mkdir()
+        
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+    <detail>
+        <band>
+            <element kind="subreport">
+                <expression><![CDATA[$P{REPORTS_DIR} + "subreports/child.jasper"]]></expression>
+            </element>
+        </band>
+    </detail>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        (subreports_dir / "child.jrxml").write_text(
+            '<jasperReport name="child"/>', encoding='utf-8')
+        (subreports_dir / "child.jasper").write_bytes(b"dummy jasper")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(main_jrxml, output_path, include_jasper=True)
+        
+        assert result.success
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            jasper_idx = names.index("subreports/child.jasper")
+            last_jrxml_idx = max(i for i, n in enumerate(names) if n.endswith('.jrxml'))
+            assert jasper_idx > last_jrxml_idx, (
+                f".jasper ({jasper_idx}) must come after all .jrxml "
+                f"entries (last: {last_jrxml_idx}): {names}"
+            )
+    
+    def test_create_zip_includes_fresh_master_jasper(self, temp_dir, packager):
+        """Master .jasper bundled at root when include_jasper=True and fresh."""
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main">
+    <parameter name="REPORTS_DIR" class="java.lang.String">
+        <defaultValueExpression><![CDATA["./"]]></defaultValueExpression>
+    </parameter>
+</jasperReport>
+'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        (temp_dir / "main.jasper").write_bytes(b"dummy jasper")
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(main_jrxml, output_path, include_jasper=True)
+        
+        assert result.success
+        assert result.master_jasper_included == "main.jasper"
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "main.jasper" in names
+            assert names.index("main.jasper") > names.index("main.jrxml")
+    
+    def test_missing_master_jasper_warns(self, temp_dir, packager):
+        """include_jasper without a master .jasper next to the .jrxml warns."""
+        main_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="main"/>'''
+        main_jrxml = temp_dir / "main.jrxml"
+        main_jrxml.write_text(main_content, encoding='utf-8')
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(main_jrxml, output_path, include_jasper=True)
+        
+        assert result.success
+        assert result.master_jasper_included is None
+        assert any("not found next to" in w for w in result.warnings)
 
 
 class TestPackageResult:

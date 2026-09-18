@@ -284,7 +284,8 @@ muban package template.jrxml --dry-run -v
 # Custom REPORTS_DIR parameter name
 muban package template.jrxml --reports-dir-param TEMPLATE_PATH
 
-# Include compiled *.jasper subreport files (explicit opt-in, off by default)
+# Include compiled *.jasper files - subreports + main report (explicit opt-in, off by default)
+# Precompiled reports let the service skip compilation on first use (faster cold start)
 muban package template.jrxml --include-jasper
 
 # Bundle custom fonts (creates fonts.xml for JasperReports)
@@ -314,7 +315,7 @@ muban package template.docx -u --name "My Letter" --author "John Doe"
 - **JRXML & DOCX Support** - Package both JasperReports and DOCX template types
 - **Automatic Asset Discovery** - Parses JRXML to find all referenced images and subreports (JRXML only)
 - **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` source files to include their nested dependencies; raw `.jrxml` sources are bundled in the ZIP (JRXML only)
-- **No Stale .jasper by Default** - Compiled `*.jasper` files are skipped unless `--include-jasper` is passed; the service recompiles them from the bundled `.jrxml` sources. When opted in, stale `.jasper` files (older than their `.jrxml`) trigger warnings
+- **No Stale .jasper by Default** - Compiled `*.jasper` files are skipped unless `--include-jasper` is passed; the service recompiles them from the bundled `.jrxml` sources. When opted in, compiled subreports and the compiled main report (when present next to the `.jrxml`) are bundled, written after their `.jrxml` sources so the service skips compilation, and stale `.jasper` files (older than their `.jrxml`) trigger warnings
 - **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)

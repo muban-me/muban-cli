@@ -24,6 +24,7 @@ For DOCX templates, the packager:
 """
 
 import re
+import time
 import zipfile
 import logging
 import xml.etree.ElementTree as ET
@@ -71,6 +72,7 @@ class PackageResult:
     skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     skipped_jasper: List[AssetReference] = field(default_factory=list)  # *.jasper refs not packaged
+    master_jasper_included: Optional[str] = None  # main .jasper bundled via include_jasper
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     
@@ -341,9 +343,35 @@ class JRXMLPackager:
             result.success = True
             return result
         
+        # When --include-jasper: bundle the compiled MAIN report too. It must be
+        # written AFTER its .jrxml source in the ZIP (the Muban service decides
+        # compile-vs-load from extraction order/mtime).
+        master_jasper_entry = None
+        if self.include_jasper:
+            master_jasper = template_path.with_suffix('.jasper')
+            if master_jasper.exists():
+                if master_jasper.stat().st_mtime >= template_path.stat().st_mtime:
+                    master_jasper_entry = (master_jasper, master_jasper.name)
+                    result.master_jasper_included = master_jasper.name
+                else:
+                    result.warnings.append(
+                        f"Stale compiled main report: {master_jasper.name} is older than "
+                        f"{template_path.name} - the service will recompile it. "
+                        f"Rebuild the .jasper or omit it from the package."
+                    )
+            else:
+                result.warnings.append(
+                    f"Compiled main report {master_jasper.name} not found next to "
+                    f"{template_path.name} - the service will compile the main report "
+                    f"on first use. Build it with dev-tools/jrcompile."
+                )
+        
         # Create ZIP archive
         try:
-            self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
+            self._create_zip(
+                template_path, assets_to_include, output_path,
+                fonts, fonts_xml_path, master_jasper_entry
+            )
             result.success = True
         except Exception as e:
             result.errors.append(f"Failed to create ZIP: {e}")
@@ -777,6 +805,7 @@ class JRXMLPackager:
         
         # Find subreports and recursively analyze their source files
         subreport_assets: List[AssetReference] = []
+        stale_jasper_paths: Set[str] = set()
         
         for asset in assets:
             if asset.asset_type == "subreport" and asset.path.endswith('.jasper'):
@@ -793,10 +822,12 @@ class JRXMLPackager:
                         jasper_abs_path = (base_dir / asset.path).resolve()
                         if jasper_abs_path.exists() and jasper_abs_path.is_file():
                             if jasper_abs_path.stat().st_mtime < jrxml_abs_path.stat().st_mtime:
+                                stale_jasper_paths.add(asset.path)
                                 result.warnings.append(
                                     f"Stale compiled subreport: {asset.path} is older than its "
-                                    f"source {jrxml_source_path} - the service will recompile it. "
-                                    f"Consider rebuilding the .jasper or omitting it from the package."
+                                    f"source {jrxml_source_path} - it will be excluded from the "
+                                    f"package and the service will compile it from the .jrxml "
+                                    f"source. Rebuild the .jasper to precompile this subreport."
                                 )
                     
                     # Include the raw .jrxml source alongside the .jasper
@@ -854,6 +885,17 @@ class JRXMLPackager:
                     included.append(asset)
             unique_assets = included
         
+        # When include_jasper: drop stale *.jasper entries - thanks to the ZIP
+        # entry ordering the service would otherwise LOAD the stale compiled
+        # report instead of compiling the fresh .jrxml source.
+        if self.include_jasper and stale_jasper_paths:
+            included: List[AssetReference] = []
+            for asset in unique_assets:
+                if asset.asset_type == "subreport" and asset.path in stale_jasper_paths:
+                    continue
+                included.append(asset)
+            unique_assets = included
+        
         return unique_assets
 
     def _create_zip(
@@ -862,7 +904,8 @@ class JRXMLPackager:
         assets: List[Tuple[Path, str]],
         output_path: Path,
         fonts: Optional[List[FontSpec]] = None,
-        fonts_xml_path: Optional[Path] = None
+        fonts_xml_path: Optional[Path] = None,
+        master_jasper_entry: Optional[Tuple[Path, str]] = None
     ) -> None:
         """
         Create a ZIP archive with the template and its assets.
@@ -873,25 +916,40 @@ class JRXMLPackager:
         in a fonts/ directory. Alternatively, an existing fonts.xml
         file can be included directly.
         
+        Entry ordering contract for precompiled reports: the Muban service
+        extracts ZIPs sequentially without setting file mtimes, so a .jasper
+        must be extracted AFTER its .jrxml source for the service to skip
+        compilation. Therefore all .jasper entries (subreports and the main
+        report) are written LAST, and their ZIP timestamps are set to be
+        >= the sibling .jrxml timestamp (robust also if the service ever
+        starts honoring ZIP entry timestamps).
+        
         Args:
             template_path: Path to the main template file (.jrxml or .docx)
             assets: List of (absolute_path, archive_path) tuples for assets
             output_path: Path for the output ZIP file
             fonts: Optional list of FontSpec objects to include
             fonts_xml_path: Optional path to existing fonts.xml file
+            master_jasper_entry: Optional (absolute_path, archive_path) of the
+                compiled MAIN report, written after everything else
         """
         fonts = fonts or []
         
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Deterministic order for the compile-skip guard: .jasper entries
+        # must be extracted after ALL .jrxml entries.
+        normal_assets = [(a, p) for a, p in assets if not p.lower().endswith('.jasper')]
+        jasper_assets = [(a, p) for a, p in assets if p.lower().endswith('.jasper')]
+        
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # Add the main template file at the root
+            # Add the main template file at the root (before any .jasper)
             zf.write(template_path, template_path.name)
             logger.debug(f"Added: {template_path.name}")
             
-            # Add all assets with their relative paths
-            for abs_path, archive_path in assets:
+            # Add non-.jasper assets with their relative paths
+            for abs_path, archive_path in normal_assets:
                 zf.write(abs_path, archive_path)
                 logger.debug(f"Added: {archive_path}")
             
@@ -925,8 +983,40 @@ class JRXMLPackager:
                         zf.write(font.file_path, archive_font_path)
                         logger.debug(f"Added: {archive_font_path}")
                         added_font_files.add(font.file_path)
+            
+            # Add compiled .jasper subreports LAST, with ZIP timestamp >= the
+            # sibling .jrxml timestamp (belt & suspenders for the skip guard).
+            for abs_path, archive_path in jasper_assets:
+                min_mtime = 0.0
+                sibling_jrxml = abs_path.with_suffix('.jrxml')
+                if sibling_jrxml.exists():
+                    min_mtime = sibling_jrxml.stat().st_mtime
+                self._write_zip_entry_with_mtime(zf, abs_path, archive_path, min_mtime)
+                logger.debug(f"Added: {archive_path}")
+            
+            # Compiled MAIN report goes absolutely last
+            if master_jasper_entry is not None:
+                abs_path, archive_path = master_jasper_entry
+                self._write_zip_entry_with_mtime(
+                    zf, abs_path, archive_path, template_path.stat().st_mtime
+                )
+                logger.debug(f"Added: {archive_path}")
         
         logger.info(f"Created ZIP: {output_path}")
+    
+    @staticmethod
+    def _write_zip_entry_with_mtime(
+        zf: zipfile.ZipFile, abs_path: Path, archive_path: str, min_mtime: float
+    ) -> None:
+        """Write a ZIP entry whose timestamp is >= min_mtime.
+        
+        ZIP stores DOS timestamps with 2-second granularity; equal timestamps
+        satisfy the service's `>=` freshness guard.
+        """
+        zinfo = zipfile.ZipInfo.from_file(abs_path, archive_path)
+        zinfo.date_time = time.localtime(max(abs_path.stat().st_mtime, min_mtime))[:6]
+        with abs_path.open('rb') as f:
+            zf.writestr(zinfo, f.read())
     
     def _parse_fonts_xml(self, fonts_xml_path: Path) -> List[Tuple[str, Path]]:
         """
