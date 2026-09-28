@@ -1279,6 +1279,72 @@ class TestPackageWithFontsXml:
             assert "fonts/NonExistent.ttf" not in names
 
 
+class TestPackageWithStyleCss:
+    """Test package() method with style_css_path parameter."""
+    
+    def test_package_with_style_css_includes_file(self, temp_dir, packager, sample_jrxml_content):
+        """Test that packaging with a CSS file bundles it as 'style.css' at the root."""
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        # Create required assets
+        (temp_dir / "assets" / "img").mkdir(parents=True)
+        (temp_dir / "assets" / "img" / "logo.png").write_bytes(b"PNG")
+        (temp_dir / "assets" / "img" / "banner.jpg").write_bytes(b"JPG")
+        
+        # Create a CSS file with a non-default name (must be renamed to style.css)
+        css_content = "<!--[if mso]>\n<style>td { mso-line-height-rule: exactly; }</style>\n<![endif]-->\n"
+        css_path = temp_dir / "email-branding.css"
+        css_path.write_text(css_content, encoding='utf-8')
+        
+        output_path = temp_dir / "output.zip"
+        result = packager.package(jrxml_path, output_path, style_css_path=css_path)
+        
+        assert result.success
+        assert result.style_css_included == css_path.resolve()
+        assert output_path.exists()
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            names = zf.namelist()
+            assert "style.css" in names
+            # Normalize line endings (Windows writes CRLF into the source file)
+            actual = zf.read("style.css").decode('utf-8').replace('\r\n', '\n')
+            assert actual == css_content.replace('\r\n', '\n')
+    
+    def test_package_style_css_missing_file_warns_but_succeeds(self, temp_dir, packager, sample_jrxml_content):
+        """Test that a missing CSS file produces a warning, not an error."""
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        (temp_dir / "assets" / "img").mkdir(parents=True)
+        (temp_dir / "assets" / "img" / "logo.png").write_bytes(b"PNG")
+        (temp_dir / "assets" / "img" / "banner.jpg").write_bytes(b"JPG")
+        
+        missing_css = temp_dir / "does-not-exist.css"
+        output_path = temp_dir / "output.zip"
+        result = packager.package(jrxml_path, output_path, style_css_path=missing_css)
+        
+        assert result.success
+        assert result.style_css_included is None
+        assert any("style.css not found" in w for w in result.warnings)
+        
+        with zipfile.ZipFile(output_path, 'r') as zf:
+            assert "style.css" not in zf.namelist()
+    
+    def test_package_style_css_dry_run_sets_result(self, temp_dir, packager, sample_jrxml_content):
+        """Test that dry-run reports the CSS file without creating a ZIP."""
+        jrxml_path = temp_dir / "test.jrxml"
+        jrxml_path.write_text(sample_jrxml_content, encoding='utf-8')
+        
+        css_path = temp_dir / "style.css"
+        css_path.write_text("@media only screen and (max-width: 480px) { }", encoding='utf-8')
+        
+        result = packager.package(jrxml_path, dry_run=True, style_css_path=css_path)
+        
+        assert result.success
+        assert result.style_css_included == css_path.resolve()
+
+
 def _create_docx_with_images(docx_path: Path, alt_texts: list, header_alt_texts: list = None):
     """
     Create a minimal DOCX file (ZIP with Open XML) containing images with specified ALT texts.

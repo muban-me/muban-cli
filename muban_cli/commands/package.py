@@ -92,6 +92,13 @@ def validate_font_options(ctx, param, value):
     type=click.Path(exists=True, path_type=Path),
     help='Path to existing fonts.xml file to include in package.'
 )
+@click.option(
+    '--style-css',
+    type=click.Path(path_type=Path),
+    help='Path to a CSS file to include in the package as style.css. '
+         'Used by email-safe HTML post-processing (htmlExportOptions.emailSafe). '
+         'A missing file produces a warning, not an error.'
+)
 def package_cmd(
     template_file: Path,
     output: Optional[Path],
@@ -106,7 +113,8 @@ def package_cmd(
     font_name: Tuple[str, ...],
     font_face: Tuple[str, ...],
     font_embedded: Tuple[bool, ...],
-    fonts_xml: Optional[Path]
+    fonts_xml: Optional[Path],
+    style_css: Optional[Path]
 ):
     """
     Package a JRXML or DOCX template into a deployable ZIP package.
@@ -145,6 +153,9 @@ def package_cmd(
       muban package template.jrxml \\
         --font-file Arial.ttf --font-name Arial --font-face normal --embedded \\
         --font-file Arial_Bold.ttf --font-name Arial --font-face bold --embedded
+      
+      # Include a template stylesheet (bundled as style.css)
+      muban package template.jrxml --style-css style.css
     
     \b
     For JRXML templates, the packager automatically:
@@ -202,7 +213,8 @@ def package_cmd(
     
     # Create packager and run
     packager = JRXMLPackager(reports_dir_param=reports_dir_param, include_jasper=include_jasper)
-    result = packager.package(template_file, output, dry_run=dry_run, fonts=fonts, fonts_xml_path=fonts_xml)
+    result = packager.package(template_file, output, dry_run=dry_run, fonts=fonts,
+                              fonts_xml_path=fonts_xml, style_css_path=style_css)
     
     # Display results
     _display_result(result, verbose, dry_run, fonts)
@@ -223,9 +235,10 @@ def _upload_package(output_path: Path, name: Optional[str], author: Optional[str
     
     config = get_config_manager().get()
     
-    if not config.is_authenticated():
-        print_error("Not authenticated. Run 'muban login' first.")
-        raise SystemExit(1)
+    # NOTE: No is_authenticated() gate here. Servers may run with authentication
+    # disabled (e.g. local/dev deployments), in which case there is no token at
+    # all and the upload succeeds without an Authorization header. The server
+    # response drives the error handling below, exactly like 'muban push'.
     
     # Use filename stem as default name
     template_name = name or output_path.stem
@@ -393,6 +406,12 @@ def _display_result(result: PackageResult, verbose: bool, dry_run: bool, fonts: 
         click.echo()
         for error in result.errors:
             print_error(error)
+    # Show template CSS
+    if result.style_css_included:
+        click.echo()
+        click.echo(click.style("Template CSS:", bold=True))
+        click.echo(f"  ✓ style.css (from {result.style_css_included.name})")
+    
     # Show fonts info
     if fonts:
         click.echo()

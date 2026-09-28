@@ -455,6 +455,64 @@ class TestPackageCommand:
             call_kwargs = mock_packager.package.call_args
             assert call_kwargs.kwargs.get('fonts_xml_path') == fonts_xml
     
+    def test_package_with_style_css_option(self, runner, tmp_path):
+        """Test package command passes style_css_path to packager."""
+        jrxml_file = tmp_path / "test.jrxml"
+        jrxml_file.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports">
+    <detail><band height="100"></band></detail>
+</jasperReport>''')
+        
+        style_css = tmp_path / "branding.css"
+        style_css.write_text("<!--[if mso]><style></style><![endif]-->")
+        
+        output_zip = tmp_path / "test.zip"
+        output_zip.write_bytes(b"fake zip data")
+        
+        with patch('muban_cli.commands.package.JRXMLPackager') as mock_packager_class:
+            mock_packager = MagicMock()
+            mock_result = MagicMock()
+            mock_result.style_css_included = style_css
+            mock_packager.package.return_value = mock_result
+            mock_packager_class.return_value = mock_packager
+            
+            result = runner.invoke(cli, [
+                'package', str(jrxml_file),
+                '--style-css', str(style_css)
+            ])
+            
+            # Verify packager was called with style_css_path
+            mock_packager.package.assert_called_once()
+            call_kwargs = mock_packager.package.call_args
+            assert call_kwargs.kwargs.get('style_css_path') == style_css
+
+    def test_upload_package_works_without_authentication(self, tmp_path):
+        """Test _upload_package does not require authentication (auth-disabled servers)."""
+        from muban_cli.commands import package as package_module
+        
+        output_zip = tmp_path / "test.zip"
+        output_zip.write_bytes(b"PK fake zip")
+        
+        config = MagicMock()
+        config.default_author = "TEST"
+        config_manager = MagicMock()
+        config_manager.get.return_value = config
+        
+        client_ctx = MagicMock()
+        client_ctx.upload_template.return_value = {"data": {"id": "abc", "name": "test"}}
+        client = MagicMock()
+        client.__enter__.return_value = client_ctx
+        client.__exit__.return_value = False
+        
+        with patch.object(package_module, 'get_config_manager', return_value=config_manager), \
+                patch('muban_cli.api.MubanAPIClient', return_value=client):
+            package_module._upload_package(output_zip, None, None, verbose=False)
+        
+        client_ctx.upload_template.assert_called_once()
+        call_args = client_ctx.upload_template.call_args
+        assert call_args.kwargs.get('name') == "test"
+        assert call_args.kwargs.get('author') == "TEST"
+    
     def test_package_dry_run(self, runner, tmp_path):
         """Test package command with --dry-run flag."""
         # Create test JRXML file
