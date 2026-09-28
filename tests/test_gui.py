@@ -306,6 +306,27 @@ class TestPackageWorker:
         
         assert worker.fonts_xml_path == fonts_xml
 
+    def test_package_worker_with_style_css(self, tmp_path):
+        """Test PackageWorker with style_css_path."""
+        from muban_cli.gui.tabs.package_tab import PackageWorker
+        
+        jrxml_path = tmp_path / "test.jrxml"
+        jrxml_path.write_text('<?xml version="1.0"?><jasperReport/>')
+        
+        style_css = tmp_path / "branding.css"
+        style_css.write_text("<!--[if mso]><style></style><![endif]-->")
+        
+        worker = PackageWorker(
+            template_path=jrxml_path,
+            output_path=None,
+            fonts=[],
+            reports_dir_param="REPORTS_DIR",
+            style_css_path=style_css,
+        )
+        
+        assert worker.style_css_path == style_css
+        assert worker.fonts_xml_path is None
+
 
 class TestUploadWorker:
     """Tests for the UploadWorker thread."""

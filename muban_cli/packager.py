@@ -69,6 +69,7 @@ class PackageResult:
     assets_included: List[Path] = field(default_factory=list)
     fonts_included: List[FontSpec] = field(default_factory=list)  # Fonts bundled in package
     fonts_xml_files: List[Path] = field(default_factory=list)  # Font files from fonts.xml
+    style_css_included: Optional[Path] = None  # style.css source bundled as 'style.css'
     skipped_urls: List[str] = field(default_factory=list)  # Remote URLs skipped
     skipped_dynamic: List[str] = field(default_factory=list)  # Fully dynamic expressions
     skipped_jasper: List[AssetReference] = field(default_factory=list)  # *.jasper refs not packaged
@@ -214,6 +215,7 @@ class JRXMLPackager:
         dry_run: bool = False,
         fonts: Optional[List[FontSpec]] = None,
         fonts_xml_path: Optional[Path] = None,
+        style_css_path: Optional[Path] = None,
         include_jasper: Optional[bool] = None
     ) -> PackageResult:
         """
@@ -225,6 +227,9 @@ class JRXMLPackager:
             dry_run: If True, don't create ZIP, just analyze dependencies
             fonts: Optional list of FontSpec objects to include in the package
             fonts_xml_path: Optional path to existing fonts.xml file to include
+            style_css_path: Optional path to a CSS file bundled as 'style.css'
+                            (used by email-safe HTML post-processing). A missing
+                            file produces a warning, not an error.
             include_jasper: Override the constructor's include_jasper setting for
                             this call. Default (False): referenced *.jasper files are
                             skipped and reported in result.skipped_jasper. The service
@@ -267,6 +272,15 @@ class JRXMLPackager:
         
         result.output_path = output_path
         
+        # Validate optional template CSS (style.css)
+        if style_css_path:
+            style_css_path = Path(style_css_path).resolve()
+            if not style_css_path.exists():
+                result.warnings.append(f"style.css not found: {style_css_path} - skipping")
+                style_css_path = None
+            else:
+                result.style_css_included = style_css_path
+        
         # For DOCX templates, analyze image ALT text for asset references
         if result.template_type == "DOCX":
             try:
@@ -299,7 +313,7 @@ class JRXMLPackager:
             
             # Create ZIP archive with DOCX file and assets
             try:
-                self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path)
+                self._create_zip(template_path, assets_to_include, output_path, fonts, fonts_xml_path, style_css_path)
                 result.success = True
             except Exception as e:
                 result.errors.append(f"Failed to create ZIP: {e}")
@@ -370,7 +384,7 @@ class JRXMLPackager:
         try:
             self._create_zip(
                 template_path, assets_to_include, output_path,
-                fonts, fonts_xml_path, master_jasper_entry
+                fonts, fonts_xml_path, style_css_path, master_jasper_entry
             )
             result.success = True
         except Exception as e:
@@ -905,6 +919,7 @@ class JRXMLPackager:
         output_path: Path,
         fonts: Optional[List[FontSpec]] = None,
         fonts_xml_path: Optional[Path] = None,
+        style_css_path: Optional[Path] = None,
         master_jasper_entry: Optional[Tuple[Path, str]] = None
     ) -> None:
         """
@@ -930,6 +945,7 @@ class JRXMLPackager:
             output_path: Path for the output ZIP file
             fonts: Optional list of FontSpec objects to include
             fonts_xml_path: Optional path to existing fonts.xml file
+            style_css_path: Optional path to a CSS file bundled as 'style.css'
             master_jasper_entry: Optional (absolute_path, archive_path) of the
                 compiled MAIN report, written after everything else
         """
@@ -984,7 +1000,13 @@ class JRXMLPackager:
                         logger.debug(f"Added: {archive_font_path}")
                         added_font_files.add(font.file_path)
             
-            # Add compiled .jasper subreports LAST, with ZIP timestamp >= the
+            # Add template CSS (style.css) if provided — always under the fixed
+            # name 'style.css' at the package root, regardless of source filename.
+            if style_css_path and style_css_path.exists():
+                zf.write(style_css_path, 'style.css')
+                logger.debug(f"Added: style.css (from {style_css_path})")
+            
+            # Add compiled .jasper subreports LAST, with ZIP timestamp >= the the
             # sibling .jrxml timestamp (belt & suspenders for the skip guard).
             for abs_path, archive_path in jasper_assets:
                 min_mtime = 0.0

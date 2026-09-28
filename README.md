@@ -301,6 +301,10 @@ muban package template.jrxml \
 # Use existing fonts.xml file instead of building font list
 muban package template.jrxml --fonts-xml path/to/fonts.xml
 
+# Include a template stylesheet (bundled as style.css at the package root)
+# Used by email-safe HTML post-processing (htmlExportOptions.emailSafe)
+muban package template.jrxml --style-css path/to/style.css
+
 # Package and upload in one step
 muban package template.jrxml --upload
 muban package template.docx --upload
@@ -317,6 +321,7 @@ muban package template.docx -u --name "My Letter" --author "John Doe"
 - **Recursive Subreport Analysis** - Analyzes subreport `.jrxml` source files to include their nested dependencies; raw `.jrxml` sources are bundled in the ZIP (JRXML only)
 - **No Stale .jasper by Default** - Compiled `*.jasper` files are skipped unless `--include-jasper` is passed; the service recompiles them from the bundled `.jrxml` sources. When opted in, compiled subreports and the compiled main report (when present next to the `.jrxml`) are bundled, written after their `.jrxml` sources so the service skips compilation, and stale `.jasper` files (older than their `.jrxml`) trigger warnings
 - **Font Bundling** - Include custom fonts with auto-generated `fonts.xml` or use an existing one via `--fonts-xml`
+- **Template CSS** - Bundle a stylesheet as `style.css` via `--style-css` (injected into HTML by email-safe post-processing; a missing file produces a warning, not an error)
 - **REPORTS_DIR Resolution** - Respects the `REPORTS_DIR` parameter default value for path resolution
 - **Dynamic Directory Support** - Includes all files from directories with dynamic filenames (`$P{DIR} + "path/" + $P{filename}`)
 - **URL Skipping** - Automatically skips remote resources (http://, https://, etc.)

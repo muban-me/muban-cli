@@ -50,6 +50,7 @@ class PackageWorker(QThread):
         reports_dir_param: str,
         dry_run: bool = False,
         fonts_xml_path: Optional[Path] = None,
+        style_css_path: Optional[Path] = None,
         include_jasper: bool = False,
     ):
         super().__init__()
@@ -59,6 +60,7 @@ class PackageWorker(QThread):
         self.reports_dir_param = reports_dir_param
         self.dry_run = dry_run
         self.fonts_xml_path = fonts_xml_path
+        self.style_css_path = style_css_path
         self.include_jasper = include_jasper
 
     def run(self):
@@ -73,6 +75,7 @@ class PackageWorker(QThread):
                 dry_run=self.dry_run,
                 fonts=self.fonts,
                 fonts_xml_path=self.fonts_xml_path,
+                style_css_path=self.style_css_path,
             )
             self.finished.emit(result)
         except Exception as e:
@@ -212,6 +215,25 @@ class PackageTab(QWidget):
 
         top_layout.addWidget(fonts_group)
 
+        # Template CSS group
+        style_group = QGroupBox("Template CSS (Optional)")
+        style_layout = QVBoxLayout(style_group)
+        style_css_layout = QHBoxLayout()
+        style_css_layout.addWidget(QLabel("style.css:"))
+        self.style_css_input = QLineEdit()
+        self.style_css_input.setPlaceholderText(
+            "CSS bundled as style.css (used by email-safe HTML post-processing)..."
+        )
+        style_css_layout.addWidget(self.style_css_input)
+        self.style_css_browse_btn = QPushButton("Browse...")
+        self.style_css_browse_btn.clicked.connect(self._browse_style_css)
+        style_css_layout.addWidget(self.style_css_browse_btn)
+        self.style_css_clear_btn = QPushButton("Clear")
+        self.style_css_clear_btn.clicked.connect(self._clear_style_css)
+        style_css_layout.addWidget(self.style_css_clear_btn)
+        style_layout.addLayout(style_css_layout)
+        top_layout.addWidget(style_group)
+
         # Action buttons
         action_layout = QHBoxLayout()
         self.dry_run_cb = QCheckBox("Dry run (analyze only)")
@@ -337,6 +359,21 @@ class PackageTab(QWidget):
         self.add_font_btn.setEnabled(not has_fonts_xml)
         self.remove_font_btn.setEnabled(not has_fonts_xml)
 
+    def _browse_style_css(self):
+        """Browse for a CSS file to bundle as style.css."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select CSS File",
+            "",
+            "CSS Files (*.css);;All Files (*)",
+        )
+        if file_path:
+            self.style_css_input.setText(file_path)
+
+    def _clear_style_css(self):
+        """Clear the style.css path."""
+        self.style_css_input.clear()
+
     def _remove_font(self):
         """Remove selected font."""
         rows = set(item.row() for item in self.fonts_table.selectedItems())
@@ -386,6 +423,13 @@ class PackageTab(QWidget):
             QMessageBox.warning(self, "Error", f"fonts.xml not found: {fonts_xml_path}")
             return
 
+        # Get style.css path if specified
+        style_css_text = self.style_css_input.text().strip()
+        style_css_path = Path(style_css_text) if style_css_text else None
+        if style_css_path and not style_css_path.exists():
+            QMessageBox.warning(self, "Error", f"style.css not found: {style_css_path}")
+            return
+
         # Disable UI during operation
         self._set_ui_enabled(False)
         self.progress.setVisible(True)
@@ -401,6 +445,7 @@ class PackageTab(QWidget):
             self.reports_dir_input.text(),
             dry_run,
             fonts_xml_path,
+            style_css_path,
             self.include_jasper_cb.isChecked(),
         )
         self.worker.finished.connect(self._on_package_finished)
@@ -430,6 +475,8 @@ class PackageTab(QWidget):
                     self._log(f"  Fonts: {unique_font_files} file(s)")
                 elif result.fonts_xml_files:
                     self._log(f"  Fonts: {len(result.fonts_xml_files)} file(s) from fonts.xml")
+                if result.style_css_included:
+                    self._log(f"  Template CSS: style.css (from {result.style_css_included.name})")
                 if not is_dry_run and result.output_path and result.output_path.exists():
                     size_kb = result.output_path.stat().st_size / 1024
                     self._log(f"  Size: {size_kb:.1f} KB")
@@ -536,6 +583,9 @@ class PackageTab(QWidget):
         self.fonts_xml_input.setEnabled(enabled)
         self.fonts_xml_browse_btn.setEnabled(enabled)
         self.fonts_xml_clear_btn.setEnabled(enabled)
+        self.style_css_input.setEnabled(enabled)
+        self.style_css_browse_btn.setEnabled(enabled)
+        self.style_css_clear_btn.setEnabled(enabled)
         # Font controls respect fonts.xml state when re-enabling
         has_fonts_xml = bool(self.fonts_xml_input.text().strip())
         self.fonts_table.setEnabled(enabled and not has_fonts_xml)
